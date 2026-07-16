@@ -3,12 +3,17 @@ import { useSession } from "next-auth/react";
 import { ReactNode } from "react";
 import Nav from "./Nav";
 import SignInGate from "./SignInGate";
+import { Spinner } from "./Loading";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { status } = useSession();
 
   if (status === "loading") {
-    return <div className="min-h-screen flex items-center justify-center text-muted">Loading…</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted gap-2">
+        <Spinner /> Loading…
+      </div>
+    );
   }
   if (status !== "authenticated") {
     return <SignInGate />;
