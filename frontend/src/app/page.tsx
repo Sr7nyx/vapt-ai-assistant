@@ -17,7 +17,7 @@ export default function Dashboard() {
   }, [token]);
 
   return (
-    <div>
+    <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Overview</h1>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Stat label="Projects" value={projects.length} />
