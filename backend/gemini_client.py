@@ -75,9 +75,9 @@ class ReviewVerdict(BaseModel):
 # If a lane's key is unset, it falls back to the key passed into analyze_vapt_data
 # (the one entered in the UI / secret), so a single OpenRouter key drives both
 # lanes out of the box.
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MAIN_MODELS = ["meta-llama/llama-3.3-70b-instruct:free"]
-DEFAULT_REVIEW_MODELS = ["deepseek/deepseek-r1:free"]
+DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_MAIN_MODELS = ["llama-3.3-70b-versatile"]
+DEFAULT_REVIEW_MODELS = ["openai/gpt-oss-120b"]
 MAX_ATTEMPTS_PER_MODEL = 2          # initial try + 1 retry
 BASE_RETRY_DELAY = 2.0              # seconds; doubled each retry
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
