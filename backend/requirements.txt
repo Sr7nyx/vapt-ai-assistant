@@ -1,0 +1,15 @@
+# API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# Postgres (Supabase) + Google auth
+psycopg[binary]>=3.2.0
+psycopg-pool>=3.2.0
+google-auth>=2.30.0
+
+# Brain modules (reused unchanged)
+openai>=1.40.0
+python-docx>=1.1.0
+reportlab>=4.1.0
+openpyxl>=3.1.2
