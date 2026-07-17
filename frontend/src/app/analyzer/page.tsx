@@ -1,34 +1,49 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
 import { getApiKey } from "@/lib/prefs";
+import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
 
-const TYPES = [
-  "General VAPT Analysis",
-  "Burp Suite Finding",
-  "Nessus Finding",
-  "Nmap Result",
-  "Source Code Review",
-  "Cloud Misconfiguration",
+const ANALYSIS_TYPES = [
+  "OWASP Top 10 Analysis",
+  "API Security Analysis",
+  "Security Headers Analysis",
+  "Sensitive Information Disclosure Analysis",
+  "Access Control Analysis",
+  "Vulnerability Report Generation",
+  "False Positive Check",
+  "Remediation Advice",
 ];
+const CATEGORIES = ["Web Application/API Vulnerability", "Network Security", "Mobile Application Vulnerability", "Source Code Review"];
+const ENVIRONMENTS = ["STG", "PROD", "DEV", "UAT", "LOCAL", "Unknown"];
+const STATUSES = ["Need Review", "Draft", "Confirmed", "False Positive", "Accepted Risk", "Fixed", "Retest Passed", "Retest Failed"];
+const TEXT_EXT = ["txt", "log", "json", "har", "csv", "xml", "yaml", "yml", "md"];
+const PER_FILE_CAP = 15000;
 
 type F = Record<string, unknown>;
+type Attachment = { name: string; content: string; skipped: boolean };
 
 export default function AnalyzerPage() {
   const { data: session } = useSession();
   const token = session?.id_token;
-  const { projectId } = useProject();
+  const { projectId, setProjectId } = useProject();
   const { notify } = useToast();
-  const [type, setType] = useState(TYPES[0]);
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [type, setType] = useState(ANALYSIS_TYPES[0]);
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [environment, setEnvironment] = useState(ENVIRONMENTS[0]);
+  const [status, setStatus] = useState(STATUSES[0]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [results, setResults] = useState<F[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -36,24 +51,61 @@ export default function AnalyzerPage() {
   const handled = useRef<string | null>(null);
   const job = useJob(token, jobId);
 
-  // Fire a toast + capture editable results exactly once per completed job.
+  useEffect(() => {
+    if (token) api.listProjects(token).then(setProjects).catch(() => {});
+  }, [token]);
+
+  const applyDefaults = useCallback(
+    (f: F): F => ({
+      ...f,
+      category: (f.category as string) || category,
+      environment: (f.environment as string) || environment,
+      status: (f.status as string) || status,
+    }),
+    [category, environment, status]
+  );
+
   useEffect(() => {
     if (!job?.done || !jobId || handled.current === jobId) return;
     handled.current = jobId;
     if (job.status === "done") {
-      const r = Array.isArray(job.result) ? (job.result as F[]) : [];
+      const r = (Array.isArray(job.result) ? (job.result as F[]) : []).map(applyDefaults);
       setResults(r);
       notify(`Analysis complete — ${r.length} finding(s)`, "success");
     } else {
       notify(`Analysis failed: ${job.error || "unknown error"}`, "error");
     }
-  }, [job, jobId, notify]);
+  }, [job, jobId, notify, applyDefaults]);
+
+  const addFiles = async (list: FileList | null) => {
+    if (!list) return;
+    const next: Attachment[] = [];
+    for (const file of Array.from(list)) {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (TEXT_EXT.includes(ext)) {
+        const text = await file.text();
+        next.push({ name: file.name, content: text.slice(0, PER_FILE_CAP), skipped: false });
+      } else {
+        next.push({ name: file.name, content: "", skipped: true });
+      }
+    }
+    setAttachments((prev) => [...prev, ...next]);
+  };
+
+  const removeAttachment = (i: number) => setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+
+  const combinedInput = () =>
+    [input, ...attachments.filter((a) => !a.skipped).map((a) => `\n\n--- ${a.name} ---\n${a.content}`)].join("").trim();
 
   const run = async () => {
-    if (!input.trim()) return;
+    const raw = combinedInput();
+    if (!raw) {
+      notify("Add some evidence or a text file first.", "error");
+      return;
+    }
     setResults([]);
     try {
-      const { job_id } = await api.analyze(token, { analysis_type: type, raw_input: input, api_key: getApiKey() || undefined });
+      const { job_id } = await api.analyze(token, { analysis_type: type, raw_input: raw, api_key: getApiKey() || undefined });
       handled.current = null;
       setJobId(job_id);
     } catch (e) {
@@ -63,14 +115,14 @@ export default function AnalyzerPage() {
 
   const commit = async () => {
     if (!projectId) {
-      notify("Select a project first (Projects page).", "error");
+      notify("Select a project first.", "error");
       return;
     }
     setCommitting(true);
     try {
       let n = 0;
       for (const f of results) {
-        await api.createFinding(token, projectId, f);
+        await api.createFinding(token, projectId, applyDefaults(f));
         n++;
       }
       notify(`Committed ${n} finding(s) to the project`, "success");
@@ -82,23 +134,108 @@ export default function AnalyzerPage() {
   };
 
   const running = !!job && !job.done;
+  const skippedCount = attachments.filter((a) => a.skipped).length;
 
   return (
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Analyzer</h1>
 
-      <div className="card grid gap-3 mb-4">
-        <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
-          {TYPES.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
-        <textarea
-          className="input min-h-48 font-mono text-xs"
-          placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
+      <div className="card grid gap-4 mb-4">
+        <Field label="Project">
+          <select className="input" value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">— no project selected —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.client ? ` (${p.client})` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Analysis type">
+          <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+            {ANALYSIS_TYPES.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid md:grid-cols-3 gap-4">
+          <Field label="Default category">
+            <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Default environment">
+            <select className="input" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
+              {ENVIRONMENTS.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Default status">
+            <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUSES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Evidence files (optional)">
+          <label className="border border-dashed border-border rounded-lg px-4 py-6 text-center text-sm text-muted hover:border-accent transition-colors cursor-pointer block">
+            <input
+              type="file"
+              multiple
+              accept=".txt,.log,.json,.har,.csv,.xml,.yaml,.yml,.md"
+              className="hidden"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            Click to attach text evidence — TXT, LOG, JSON, HAR, CSV, XML, YAML, MD (up to {PER_FILE_CAP.toLocaleString()} chars each)
+          </label>
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {attachments.map((a, i) => (
+                <span key={i} className={`chip flex items-center gap-2 ${a.skipped ? "text-warn" : ""}`}>
+                  {a.name}
+                  {a.skipped && " (not text)"}
+                  <button className="hover:text-danger" onClick={() => removeAttachment(i)} aria-label="Remove">
+                    &#215;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {skippedCount > 0 && (
+            <p className="text-xs text-warn mt-1">
+              {skippedCount} non-text file(s) attached but not sent — the analysis pipeline is text-only.
+            </p>
+          )}
+        </Field>
+
+        <Field label="Evidence / raw input">
+          <textarea
+            className="input min-h-48 font-mono text-xs"
+            placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
+          <div className="flex justify-between text-xs text-muted mt-1">
+            <span>{input.length.toLocaleString()} chars typed</span>
+            {input && (
+              <button className="hover:text-text" onClick={() => setInput("")}>
+                Clear
+              </button>
+            )}
+          </div>
+        </Field>
+
         <div>
           <button className="btn" onClick={run} disabled={running}>
             {running ? (
@@ -106,7 +243,7 @@ export default function AnalyzerPage() {
                 <Spinner /> Analyzing
               </span>
             ) : (
-              "Analyze"
+              "Run analysis"
             )}
           </button>
         </div>
@@ -123,18 +260,24 @@ export default function AnalyzerPage() {
             </button>
           </div>
           {results.map((f, i) => (
-            <div key={i} className="card flex items-start justify-between gap-3">
+            <div key={i} className="card card-hover flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
                   <span className="font-medium">{f.title as string}</span>
                 </div>
-                {typeof f.cvss === "string" && f.cvss && <div className="text-xs text-muted mt-1">{f.cvss}</div>}
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {typeof f.cwe === "string" && f.cwe && <span className="chip">{f.cwe}</span>}
+                  {typeof f.category === "string" && f.category && <span className="chip">{f.category}</span>}
+                  {typeof f.status === "string" && f.status && <span className="chip">{f.status}</span>}
+                </div>
                 {typeof f.description === "string" && f.description && (
                   <p className="text-sm text-muted mt-2 line-clamp-3">{f.description}</p>
                 )}
               </div>
-              <button className="btn-sm shrink-0" onClick={() => setEditingIdx(i)}>Edit</button>
+              <button className="btn-sm shrink-0" onClick={() => setEditingIdx(i)}>
+                Edit
+              </button>
             </div>
           ))}
         </div>
@@ -152,5 +295,14 @@ export default function AnalyzerPage() {
         />
       )}
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-sm text-muted">{label}</span>
+      {children}
+    </label>
   );
 }
