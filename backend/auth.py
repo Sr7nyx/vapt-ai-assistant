@@ -38,10 +38,14 @@ def get_current_user(authorization: str = Header(default="")) -> User:
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
 
+    # Require the client ID so the token audience is always verified. Without it,
+    # verify_oauth2_token would skip the audience check and accept an ID token
+    # issued for ANY Google OAuth app -- a real authentication bypass.
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Server auth is not configured (GOOGLE_CLIENT_ID is missing).")
+
     try:
-        claims = google_id_token.verify_oauth2_token(
-            token, _google_request, GOOGLE_CLIENT_ID or None
-        )
+        claims = google_id_token.verify_oauth2_token(token, _google_request, GOOGLE_CLIENT_ID)
     except Exception as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
 
