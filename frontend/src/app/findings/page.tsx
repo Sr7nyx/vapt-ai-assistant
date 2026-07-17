@@ -1,51 +1,72 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useProject } from "@/lib/ProjectContext";
-import { Finding } from "@/lib/types";
+import { Finding, Project } from "@/lib/types";
 import { sevClass, verdictOf } from "@/components/Severity";
 import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Loading";
 import FindingEditor from "@/components/FindingEditor";
+import RetestModal from "@/components/RetestModal";
+import MultiSelect from "@/components/MultiSelect";
 
-const RETEST = ["Fixed", "Open", "Partially Fixed", "Regressed", "Accepted Risk"];
+const SEV_ORDER = ["Critical", "High", "Medium", "Low", "Informational"];
 
 export default function FindingsPage() {
   const { data: session } = useSession();
   const token = session?.id_token;
-  const { projectId } = useProject();
+  const { projectId, setProjectId } = useProject();
   const { notify } = useToast();
+
+  const [projects, setProjects] = useState<Project[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState<Finding | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [retesting, setRetesting] = useState<Finding | null>(null);
+  const [sevF, setSevF] = useState<string[]>([]);
+  const [statusF, setStatusF] = useState<string[]>([]);
+  const [catF, setCatF] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (token) api.listProjects(token).then(setProjects).catch(() => {});
+  }, [token]);
 
   const load = useCallback(() => {
-    if (!token || !projectId) return;
+    if (!token || !projectId) {
+      setFindings([]);
+      return;
+    }
     setLoading(true);
-    api
-      .listFindings(token, projectId)
-      .then(setFindings)
-      .catch((e) => notify((e as Error).message, "error"))
-      .finally(() => setLoading(false));
+    api.listFindings(token, projectId).then(setFindings).catch((e) => notify((e as Error).message, "error")).finally(() => setLoading(false));
   }, [token, projectId, notify]);
   useEffect(() => load(), [load]);
 
-  if (!projectId) {
-    return (
-      <div className="animate-in">
-        <h1 className="text-2xl font-semibold mb-4">Findings</h1>
-        <div className="card text-muted text-sm">Select a project on the Projects page first.</div>
-      </div>
-    );
-  }
+  const toggle = (id: number) =>
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const save = async (f: Record<string, unknown>) => {
-    await api.updateFinding(token, f.id as number, f);
-    setEditing(null);
-    notify("Finding updated", "success");
-    load();
+    try {
+      if (f.id) {
+        await api.updateFinding(token, f.id as number, f);
+        notify("Finding updated", "success");
+      } else if (projectId) {
+        await api.createFinding(token, projectId, f);
+        notify("Finding added", "success");
+      }
+      setEditing(null);
+      load();
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
   };
+
   const del = async (id: number) => {
     if (!confirm("Delete this finding?")) return;
     try {
@@ -56,83 +77,155 @@ export default function FindingsPage() {
       notify((e as Error).message, "error");
     }
   };
-  const retest = async (id: number, status: string) => {
-    try {
-      await api.retestFinding(token, id, { retest_status: status });
-      notify(`Marked "${status}"`, "success");
-      load();
-    } catch (e) {
-      notify((e as Error).message, "error");
-    }
-  };
+
+  const sevOptions = SEV_ORDER.filter((s) => findings.some((f) => f.severity === s));
+  const statusOptions = Array.from(new Set(findings.map((f) => f.status).filter(Boolean))) as string[];
+  const catOptions = Array.from(new Set(findings.map((f) => f.category as string).filter(Boolean)));
+
+  const shown = findings.filter(
+    (f) =>
+      (sevF.length === 0 || sevF.includes(f.severity)) &&
+      (statusF.length === 0 || statusF.includes(f.status || "")) &&
+      (catF.length === 0 || catF.includes((f.category as string) || ""))
+  );
 
   return (
     <div className="animate-in">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Findings</h1>
-        <span className="text-muted text-sm">{findings.length} total</span>
-      </div>
+      <h1 className="text-2xl font-semibold mb-6">Findings</h1>
 
-      {loading ? (
-        <Skeleton rows={6} />
-      ) : findings.length === 0 ? (
-        <div className="card text-muted text-sm">No findings in this project yet.</div>
+      <label className="grid gap-1.5 mb-4">
+        <span className="text-sm text-muted">Project</span>
+        <select className="input" value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">— no project selected —</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.client ? ` (${p.client})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {!projectId ? (
+        <div className="card text-muted text-sm">Select a project to view its findings.</div>
       ) : (
-        <div className="card overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted border-b border-border">
-              <tr>
-                <th className="p-3 font-medium">Severity</th>
-                <th className="font-medium">Title</th>
-                <th className="font-medium">Risk</th>
-                <th className="font-medium">CWE</th>
-                <th className="font-medium">Status</th>
-                <th className="font-medium">Triage</th>
-                <th className="p-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {findings.map((f) => (
-                <tr key={f.id} className="border-b border-border/50 hover:bg-white/5 transition-colors">
-                  <td className="p-3">
-                    <span className={sevClass(f.severity)}>{f.severity}</span>
-                  </td>
-                  <td className="max-w-md">
-                    <div className="truncate font-medium">{f.title}</div>
-                  </td>
-                  <td>{f._assessment?.risk?.priority || "-"}</td>
-                  <td className="text-muted">{f.cwe || "-"}</td>
-                  <td className="text-muted">{f.status || "-"}</td>
-                  <td className="text-muted">{verdictOf(f.additional_remarks) || "-"}</td>
-                  <td className="p-3">
-                    <div className="flex gap-1 justify-end items-center">
-                      <button className="btn-sm" onClick={() => setEditing(f)}>Edit</button>
-                      <select
-                        className="input py-1 text-xs w-auto"
-                        defaultValue=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            retest(f.id, e.target.value);
-                            e.target.value = "";
-                          }
-                        }}
+        <>
+          <div className="flex justify-end mb-4">
+            <button
+              className="btn-sm"
+              onClick={() => setEditing({ title: "", severity: "Medium", status: "Need Review", category: "Web Application/API Vulnerability" })}
+            >
+              + Add finding
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <div className="text-sm text-muted mb-1.5">Filter severity</div>
+              <MultiSelect options={sevOptions} selected={sevF} onChange={setSevF} />
+            </div>
+            <div>
+              <div className="text-sm text-muted mb-1.5">Filter status</div>
+              <MultiSelect options={statusOptions} selected={statusF} onChange={setStatusF} />
+            </div>
+            <div>
+              <div className="text-sm text-muted mb-1.5">Filter category</div>
+              <MultiSelect options={catOptions} selected={catF} onChange={setCatF} />
+            </div>
+          </div>
+
+          <div className="text-sm text-muted mb-3">Showing {shown.length} of {findings.length} finding(s).</div>
+
+          {loading ? (
+            <Skeleton rows={6} />
+          ) : shown.length === 0 ? (
+            <div className="card text-muted text-sm">No findings match.</div>
+          ) : (
+            <div className="grid gap-2">
+              {shown.map((f) => {
+                const open = expanded.has(f.id);
+                const fw = (f._assessment?.frameworks || {}) as Record<string, string>;
+                const asset = (f.affected_url as string) || (f.affected_host as string) || "";
+                return (
+                  <div key={f.id} className="card p-0 overflow-hidden">
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                      onClick={() => toggle(f.id)}
+                    >
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        strokeLinecap="round" strokeLinejoin="round"
+                        className={`text-muted shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
                       >
-                        <option value="">Retest…</option>
-                        {RETEST.map((r) => (
-                          <option key={r}>{r}</option>
-                        ))}
-                      </select>
-                      <button className="btn-sm-danger" onClick={() => del(f.id)}>Del</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                      <span className={sevClass(f.severity)}>[{f.severity}]</span>
+                      <span className="text-muted text-xs shrink-0">[{f.status || "-"}]</span>
+                      <span className="font-medium truncate flex-1">{f.title}</span>
+                      {asset && <span className="text-accent text-xs truncate max-w-[240px] hidden md:inline">{asset}</span>}
+                    </button>
+
+                    {open && (
+                      <div className="px-4 pb-4 pt-1 border-t border-border/60 grid gap-3">
+                        <div className="flex gap-1 flex-wrap">
+                          {f._assessment?.risk?.priority && <span className="chip">Risk: {f._assessment.risk.priority}</span>}
+                          {fw.owasp && <span className="chip">{fw.owasp}</span>}
+                          {fw.pci && <span className="chip">{"PCI "}{fw.pci}</span>}
+                          {f.cwe && <span className="chip">{f.cwe}</span>}
+                          {fw.attack && <span className="chip">{"ATT&CK "}{fw.attack}</span>}
+                          {f.cvss && <span className="chip">{f.cvss as string}</span>}
+                          {verdictOf(f.additional_remarks) && <span className="chip">Triage: {verdictOf(f.additional_remarks)}</span>}
+                        </div>
+
+                        {asset && asset.startsWith("http") && (
+                          <a href={asset} target="_blank" rel="noreferrer" className="text-accent text-sm hover:underline break-all">
+                            {asset}
+                          </a>
+                        )}
+                        {typeof f.description === "string" && f.description && <Detail label="Description">{f.description}</Detail>}
+                        {typeof f.evidence === "string" && f.evidence && <Detail label="Evidence" mono>{f.evidence}</Detail>}
+                        {typeof f.remediation === "string" && f.remediation && <Detail label="Remediation">{f.remediation}</Detail>}
+                        {typeof f.references_data === "string" && f.references_data && <Detail label="References">{f.references_data}</Detail>}
+
+                        <div className="flex gap-2 pt-1">
+                          <button className="btn-sm" onClick={() => setEditing(f)}>Edit</button>
+                          <button className="btn-sm" onClick={() => setRetesting(f)}>Retest</button>
+                          <button className="btn-sm-danger" onClick={() => del(f.id)}>Delete</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {editing && <FindingEditor finding={editing} onSave={save} onClose={() => setEditing(null)} />}
+      {retesting && (
+        <RetestModal
+          title={retesting.title}
+          onClose={() => setRetesting(null)}
+          onSubmit={async (payload) => {
+            await api.retestFinding(token, retesting.id, payload);
+            notify(`Retest recorded (${payload.retest_status})`, "success");
+            setRetesting(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Detail({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-xs text-muted mb-1">{label}</div>
+      <div className={`text-sm whitespace-pre-wrap break-words ${mono ? "font-mono text-xs bg-bg rounded-lg p-3 max-h-64 overflow-auto" : ""}`}>
+        {children}
+      </div>
     </div>
   );
 }
