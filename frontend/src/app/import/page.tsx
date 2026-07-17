@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
-import { getApiKey } from "@/lib/prefs";
+import { getApiKey, getActiveJob, setActiveJob } from "@/lib/prefs";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
@@ -39,6 +39,11 @@ export default function ImportPage() {
   const job = useJob(token, jobId);
 
   useEffect(() => {
+    const id = getActiveJob("triage");
+    if (id) setJobId(id);
+  }, []);
+
+  useEffect(() => {
     if (!job?.done || !jobId || handled.current === jobId) return;
     handled.current = jobId;
     if (job.status === "done") {
@@ -48,6 +53,7 @@ export default function ImportPage() {
     } else {
       notify(`Triage failed: ${job.error || "unknown error"}`, "error");
     }
+    setActiveJob("triage", "");
   }, [job, jobId, notify]);
 
   const parse = async () => {
@@ -72,6 +78,7 @@ export default function ImportPage() {
     try {
       const { job_id } = await api.scanTriage(token, { candidates, api_key: getApiKey() || undefined });
       handled.current = null;
+      setActiveJob("triage", job_id);
       setJobId(job_id);
     } catch (e) {
       notify((e as Error).message, "error");
@@ -124,13 +131,15 @@ export default function ImportPage() {
         </div>
       </div>
 
-      {summary && (
+      {(summary || effective.length > 0) && (
         <>
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <Stat label="Candidates" value={summary.total ?? 0} />
-            <Stat label="Actionable" value={summary.actionable ?? 0} />
-            <Stat label="Informational" value={summary.noise ?? 0} />
-          </div>
+          {summary && (
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <Stat label="Candidates" value={summary.total ?? 0} />
+              <Stat label="Actionable" value={summary.actionable ?? 0} />
+              <Stat label="Informational" value={summary.noise ?? 0} />
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-4 items-center mb-3 text-sm">
             <label className="flex gap-2 items-center">
