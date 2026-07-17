@@ -7,13 +7,16 @@
 }
 
 body {
-  background: #0f1216;
+  background:
+    radial-gradient(1100px 560px at 100% -10%, rgba(95, 179, 172, 0.06), transparent 55%),
+    #0f1216;
   color: #dde3ea;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes slideInRight {
@@ -21,47 +24,64 @@ body {
   to { opacity: 1; transform: none; }
 }
 @keyframes modalIn {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
 
 @layer components {
   .input {
-    @apply bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent w-full transition-colors;
+    @apply bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none w-full transition-all;
+  }
+  .input:focus {
+    @apply border-accent;
+    box-shadow: 0 0 0 3px rgba(95, 179, 172, 0.12);
   }
   .btn {
-    @apply bg-accent text-black font-medium px-4 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-40 transition-opacity;
+    @apply bg-accent text-black font-medium px-4 py-2 rounded-lg text-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-sm {
-    @apply border border-border text-sm px-3 py-1.5 rounded-lg hover:border-accent disabled:opacity-40 transition-colors;
+    @apply border border-border text-sm px-3 py-1.5 rounded-lg transition-all hover:border-accent hover:text-text active:scale-[0.98] disabled:opacity-40;
   }
   .btn-sm-danger {
-    @apply border border-border text-sm px-3 py-1.5 rounded-lg text-danger hover:border-danger transition-colors;
+    @apply border border-border text-sm px-3 py-1.5 rounded-lg text-danger transition-all hover:border-danger active:scale-[0.98];
   }
   .card {
-    @apply bg-surface border border-border rounded-xl p-5;
+    @apply bg-surface border border-border rounded-xl p-5 transition-all;
+  }
+  .card-hover {
+    @apply hover:border-white/20;
   }
   .chip {
-    @apply inline-block text-xs px-2 py-0.5 rounded border border-border text-muted;
+    @apply inline-block text-xs px-2 py-0.5 rounded-md border border-border text-muted;
   }
   .animate-in {
-    animation: fadeIn 0.25s ease-out;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
+  .stagger > * {
+    animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.07s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.11s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.15s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.19s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.23s; }
   .skeleton {
-    @apply bg-white/5 rounded animate-pulse;
+    @apply bg-white/5 rounded-lg animate-pulse;
   }
   .modal-backdrop {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(2px);
     animation: fadeIn 0.15s ease-out;
   }
   .modal-panel {
-    @apply bg-surface border border-border rounded-xl p-6 w-full max-w-2xl;
-    animation: modalIn 0.2s ease-out;
+    @apply bg-surface border border-border rounded-2xl p-6 w-full max-w-2xl shadow-2xl;
+    animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .toast {
-    @apply px-4 py-3 rounded-lg text-sm border shadow-lg bg-surface;
-    animation: slideInRight 0.25s ease-out;
+    @apply px-4 py-3 rounded-xl text-sm border bg-surface shadow-2xl;
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .toast-success { @apply border-accent; }
   .toast-error { @apply border-danger; }
