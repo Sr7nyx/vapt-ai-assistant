@@ -1,6 +1,6 @@
-import { Project, Finding, Job } from "./types";
+import { Project, Finding, Job, Overview } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 function jsonHeaders(token: string | undefined): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -22,6 +22,7 @@ async function req<T>(token: string | undefined, method: string, path: string, b
 export const api = {
   me: (t: string | undefined) => req<{ id: string; email: string }>(t, "GET", "/me"),
   usage: (t: string | undefined) => req<Record<string, number>>(t, "GET", "/usage"),
+  overview: (t: string | undefined) => req<Overview>(t, "GET", "/overview"),
 
   listProjects: (t: string | undefined) => req<Project[]>(t, "GET", "/projects"),
   createProject: (t: string | undefined, body: Partial<Project>) => req<Project>(t, "POST", "/projects", body),
