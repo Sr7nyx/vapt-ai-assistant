@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
-import { getApiKey } from "@/lib/prefs";
+import { getApiKey, getActiveJob, setActiveJob } from "@/lib/prefs";
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
@@ -55,6 +55,12 @@ export default function AnalyzerPage() {
     if (token) api.listProjects(token).then(setProjects).catch(() => {});
   }, [token]);
 
+  // Reconnect to a still-running or just-finished analysis after navigating back.
+  useEffect(() => {
+    const id = getActiveJob("analyze");
+    if (id) setJobId(id);
+  }, []);
+
   const applyDefaults = useCallback(
     (f: F): F => ({
       ...f,
@@ -75,6 +81,7 @@ export default function AnalyzerPage() {
     } else {
       notify(`Analysis failed: ${job.error || "unknown error"}`, "error");
     }
+    setActiveJob("analyze", "");
   }, [job, jobId, notify, applyDefaults]);
 
   const addFiles = async (list: FileList | null) => {
@@ -107,6 +114,7 @@ export default function AnalyzerPage() {
     try {
       const { job_id } = await api.analyze(token, { analysis_type: type, raw_input: raw, api_key: getApiKey() || undefined });
       handled.current = null;
+      setActiveJob("analyze", job_id);
       setJobId(job_id);
     } catch (e) {
       notify((e as Error).message, "error");
