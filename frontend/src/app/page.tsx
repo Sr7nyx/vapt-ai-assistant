@@ -19,7 +19,7 @@ export default function Dashboard() {
   return (
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Overview</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 stagger">
         <Stat label="Projects" value={projects.length} />
         <Stat label="LLM calls" value={usage?.calls ?? "-"} />
         <Stat label="Tokens used" value={usage?.total_tokens ?? "-"} />
@@ -34,7 +34,7 @@ export default function Dashboard() {
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="card">
+    <div className="card card-hover">
       <div className="text-muted text-sm">{label}</div>
       <div className="text-2xl font-semibold mt-1">{value}</div>
     </div>
