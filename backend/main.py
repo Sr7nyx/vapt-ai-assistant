@@ -27,13 +27,15 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 import gemini_client
 import scan_import
 import risk_map
+import qa_utils
 import exporter
+from collections import Counter
 import pg_store as store
 from auth import get_current_user, User
 
@@ -146,6 +148,12 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/")
+def root():
+    # Base URL -> interactive API docs (avoids a bare 404 at "/").
+    return RedirectResponse(url="/docs")
+
+
 @app.get("/me")
 def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email}
@@ -154,6 +162,52 @@ def me(user: User = Depends(get_current_user)):
 @app.get("/usage")
 def usage(user: User = Depends(get_current_user)):
     return store.get_usage_summary(user.id)
+
+
+@app.get("/overview")
+def overview(user: User = Depends(get_current_user)):
+    """Aggregate dashboard across ALL of the user's projects: severity/status/
+    category breakdowns, risk priorities, OWASP 2025 coverage, QA verification
+    flags, and usage."""
+    projects = store.get_projects(user.id)
+    findings = []
+    for p in projects:
+        findings.extend(store.get_findings_by_project(user.id, p["id"]))
+
+    by_severity = Counter((f.get("severity") or "Unknown") for f in findings)
+    by_status = Counter((f.get("status") or "Unknown") for f in findings)
+    by_category = Counter((f.get("category") or "Uncategorized") for f in findings)
+
+    risk = Counter()
+    owasp = Counter()
+    qa_flags = 0
+    for f in findings:
+        risk[risk_map.compute_risk_priority(f)["priority"]] += 1
+        fw = risk_map.map_frameworks(f)
+        label = fw["owasp"] if fw.get("mapped") and fw.get("owasp") else "Unmapped (assign manually)"
+        owasp[label] += 1
+        if qa_utils.summarize_qa(f).get("warnings"):
+            qa_flags += 1
+
+    sev_order = ["Critical", "High", "Medium", "Low", "Informational"]
+    sev_sorted = sorted(by_severity.items(), key=lambda kv: sev_order.index(kv[0]) if kv[0] in sev_order else 99)
+
+    def rows(items):
+        return [{"label": k, "count": v} for k, v in items]
+
+    return {
+        "projects": len(projects),
+        "findings": len(findings),
+        "critical": by_severity.get("Critical", 0),
+        "high": by_severity.get("High", 0),
+        "by_severity": rows(sev_sorted),
+        "by_status": rows(by_status.most_common()),
+        "by_category": rows(by_category.most_common()),
+        "risk_priorities": {p: risk.get(p, 0) for p in ["Urgent", "High", "Moderate", "Low"]},
+        "owasp_coverage": rows(sorted(owasp.items(), key=lambda kv: (kv[0] == "Unmapped (assign manually)", kv[0]))),
+        "qa_flags": qa_flags,
+        "usage": store.get_usage_summary(user.id),
+    }
 
 
 # --- Projects ----------------------------------------------------------------
