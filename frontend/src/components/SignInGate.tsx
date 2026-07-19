@@ -1,5 +1,6 @@
 "use client";
 import { signIn } from "next-auth/react";
+import ShaderField from "./ShaderField";
 import ParticleField from "./ParticleField";
 
 const FEATURES = [
@@ -13,6 +14,7 @@ const FEATURES = [
 export default function SignInGate() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
+      <ShaderField />
       <ParticleField />
       <div
         className="pointer-events-none absolute inset-0"
