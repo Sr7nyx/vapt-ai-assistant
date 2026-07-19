@@ -21,6 +21,7 @@ precision mediump float;
 
 uniform vec2 u_resolution;
 uniform float u_time;
+uniform float u_intensity;
 
 // Theme colours (matches tailwind.config: bg #0f1216, accent #5fb3ac).
 const vec3 ACCENT = vec3(0.373, 0.702, 0.675);
@@ -71,7 +72,7 @@ void main() {
   // Fade toward the edges so text stays readable and corners stay dark.
   float vignette = smoothstep(1.05, 0.15, distance(uv, vec2(0.5, 0.42)));
 
-  float alpha = band * vignette * 0.30;
+  float alpha = band * vignette * u_intensity;
   gl_FragColor = vec4(col * alpha, alpha);
 }
 `;
@@ -88,7 +89,15 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return shader;
 }
 
-export default function ShaderField() {
+export default function ShaderField({
+  intensity = 0.3,
+  animate = true,
+  seed = 0,
+}: {
+  intensity?: number;
+  animate?: boolean;
+  seed?: number;
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -129,6 +138,8 @@ export default function ShaderField() {
 
     const uRes = gl.getUniformLocation(program, "u_resolution");
     const uTime = gl.getUniformLocation(program, "u_time");
+    const uIntensity = gl.getUniformLocation(program, "u_intensity");
+    gl.uniform1f(uIntensity, intensity);
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -158,21 +169,35 @@ export default function ShaderField() {
       raf = requestAnimationFrame(loop);
     };
 
+    const still = !animate || reduce;
+
     resize();
-    if (reduce) render(0);
+    if (still) render(seed);
     else raf = requestAnimationFrame(loop);
+
     window.addEventListener("resize", resize);
+    // The canvas may live in a bounded box (not the viewport), so track the
+    // element's own size and repaint a static frame when it changes.
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        resize();
+        if (still) render(seed);
+      });
+      observer.observe(canvas);
+    }
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      if (observer) observer.disconnect();
       if (!gl) return;
       gl.deleteBuffer(buffer);
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
     };
-  }, []);
+  }, [intensity, animate, seed]);
 
   return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />;
 }
