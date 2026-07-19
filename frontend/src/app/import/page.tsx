@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
-import { getApiKey, getActiveJob, setActiveJob } from "@/lib/prefs";
+import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/prefs";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
@@ -76,7 +76,7 @@ export default function ImportPage() {
   const triage = async () => {
     if (candidates.length === 0) return;
     try {
-      const { job_id } = await api.scanTriage(token, { candidates, api_key: getApiKey() || undefined });
+      const { job_id } = await api.scanTriage(token, { candidates, api_key: getApiKey() || undefined, lane_config: buildLaneConfig() });
       handled.current = null;
       setActiveJob("triage", job_id);
       setJobId(job_id);
