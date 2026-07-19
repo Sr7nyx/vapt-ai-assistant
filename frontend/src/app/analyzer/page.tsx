@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
-import { getApiKey, getActiveJob, setActiveJob } from "@/lib/prefs";
+import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/prefs";
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
@@ -112,7 +112,7 @@ export default function AnalyzerPage() {
     }
     setResults([]);
     try {
-      const { job_id } = await api.analyze(token, { analysis_type: type, raw_input: raw, api_key: getApiKey() || undefined });
+      const { job_id } = await api.analyze(token, { analysis_type: type, raw_input: raw, api_key: getApiKey() || undefined, lane_config: buildLaneConfig() });
       handled.current = null;
       setActiveJob("analyze", job_id);
       setJobId(job_id);
