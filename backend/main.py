@@ -30,7 +30,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
+import requests
+from openai import OpenAI
+
 import gemini_client
+import llm_config
 import scan_import
 import risk_map
 import qa_utils
@@ -68,10 +72,23 @@ class ProjectIn(BaseModel):
     end_date: str = ""
 
 
+class LaneCfgIn(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    models: Optional[List[str]] = None
+
+
+class ProviderIn(BaseModel):
+    base_url: str
+    api_key: str
+    model: Optional[str] = None
+
+
 class AnalyzeIn(BaseModel):
     analysis_type: str
     raw_input: str
     api_key: Optional[str] = None
+    lane_config: Optional[Dict[str, LaneCfgIn]] = None
 
 
 class FindingIn(BaseModel):
@@ -93,6 +110,7 @@ class RetestIn(BaseModel):
 class TriageIn(BaseModel):
     candidates: List[Dict[str, Any]]
     api_key: Optional[str] = None
+    lane_config: Optional[Dict[str, LaneCfgIn]] = None
 
 
 class ReportIn(BaseModel):
@@ -104,6 +122,16 @@ class ReportIn(BaseModel):
 # --- Helpers -----------------------------------------------------------------
 def _api_key(explicit: Optional[str]) -> str:
     return (explicit or os.environ.get("VAPT_MAIN_API_KEY") or "").strip()
+
+
+def _lanes(raw) -> dict:
+    """Validate a caller-supplied per-lane provider config (SSRF-checked)."""
+    try:
+        return llm_config.sanitize_lane_config(
+            {k: v.model_dump() for k, v in (raw or {}).items()}
+        )
+    except llm_config.ConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _require_project(user: User, project_id: int) -> dict:
@@ -162,6 +190,73 @@ def me(user: User = Depends(get_current_user)):
 @app.get("/usage")
 def usage(user: User = Depends(get_current_user)):
     return store.get_usage_summary(user.id)
+
+
+@app.get("/llm/providers")
+def llm_providers(user: User = Depends(get_current_user)):
+    """Provider hosts this server will call. User-supplied base URLs are
+    restricted to these to prevent SSRF."""
+    return {"allowed_hosts": sorted(llm_config.allowed_hosts())}
+
+
+@app.post("/llm/models")
+def llm_models(body: ProviderIn, user: User = Depends(get_current_user)):
+    """List the models a provider exposes, so the UI can offer a real dropdown
+    instead of asking the user to type a model id from memory."""
+    try:
+        base_url = llm_config.validate_base_url(body.base_url)
+    except llm_config.ConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    key = (body.api_key or "").strip() or os.environ.get("VAPT_MAIN_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=400, detail="An API key is required to list models.")
+    try:
+        resp = requests.get(
+            f"{base_url}/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=20,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach provider: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=f"Provider rejected the request: {resp.text[:200]}")
+    try:
+        payload = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Provider returned an unreadable response.")
+    items = payload.get("data") if isinstance(payload, dict) else payload
+    models = []
+    for item in items or []:
+        name = item.get("id") if isinstance(item, dict) else str(item)
+        if name:
+            models.append(name)
+    return {"models": sorted(set(models))}
+
+
+@app.post("/llm/test")
+def llm_test(body: ProviderIn, user: User = Depends(get_current_user)):
+    """Make one tiny completion so configuration errors surface here, in a second,
+    instead of three minutes into an analysis job."""
+    try:
+        base_url = llm_config.validate_base_url(body.base_url)
+    except llm_config.ConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not body.model:
+        raise HTTPException(status_code=400, detail="A model is required to test.")
+    key = (body.api_key or "").strip() or os.environ.get("VAPT_MAIN_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=400, detail="An API key is required to test.")
+    try:
+        client = OpenAI(base_url=base_url, api_key=key, timeout=25.0, max_retries=0)
+        completion = client.chat.completions.create(
+            model=body.model,
+            messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+            max_tokens=8,
+        )
+        reply = (completion.choices[0].message.content or "").strip()
+        return {"ok": True, "model": body.model, "reply": reply[:80]}
+    except Exception as exc:
+        return {"ok": False, "model": body.model, "error": str(exc)[:300]}
 
 
 @app.get("/overview")
@@ -301,7 +396,7 @@ def retest_finding(finding_id: int, body: RetestIn, user: User = Depends(get_cur
 
 
 # --- Analyze (background job) ------------------------------------------------
-def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_input: str):
+def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_input: str, lanes: dict):
     job = _job(jid)
     try:
         usage_records: List[dict] = []
@@ -310,9 +405,12 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
             job["progress"] = max(0.0, min(1.0, float(fraction)))
             job["stage"] = str(message)
 
-        findings = gemini_client.analyze_vapt_data(
-            api_key, analysis_type, raw_input, usage_sink=usage_records, progress_cb=cb,
-        )
+        # Lane overrides are thread-local, so this job's provider/model choice
+        # cannot bleed into any other user's concurrent job.
+        with gemini_client.lane_config(lanes):
+            findings = gemini_client.analyze_vapt_data(
+                api_key, analysis_type, raw_input, usage_sink=usage_records, progress_cb=cb,
+            )
         try:
             store.record_usage_batch(user_id, usage_records)
         except Exception:
@@ -333,9 +431,12 @@ def analyze(body: AnalyzeIn, user: User = Depends(get_current_user)):
     key = _api_key(body.api_key)
     if not key:
         raise HTTPException(status_code=400, detail="No LLM API key configured")
+    lanes = _lanes(body.lane_config)
     jid = _new_job(user.id)
     threading.Thread(
-        target=_run_analyze, args=(jid, user.id, key, body.analysis_type, body.raw_input), daemon=True,
+        target=_run_analyze,
+        args=(jid, user.id, key, body.analysis_type, body.raw_input, lanes),
+        daemon=True,
     ).start()
     return {"job_id": jid}
 
@@ -368,7 +469,7 @@ async def scan_parse(files: List[UploadFile] = File(...), user: User = Depends(g
 
 
 # --- Triage (background job) -------------------------------------------------
-def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict]):
+def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], lanes: dict):
     job = _job(jid)
     try:
         usage_records: List[dict] = []
@@ -377,7 +478,8 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict]):
             job["progress"] = max(0.0, min(1.0, float(fraction)))
             job["stage"] = str(message)
 
-        result = gemini_client.triage_findings(api_key, candidates, usage_sink=usage_records, progress_cb=cb)
+        with gemini_client.lane_config(lanes):
+            result = gemini_client.triage_findings(api_key, candidates, usage_sink=usage_records, progress_cb=cb)
         try:
             store.record_usage_batch(user_id, usage_records)
         except Exception:
@@ -398,8 +500,9 @@ def scan_triage(body: TriageIn, user: User = Depends(get_current_user)):
     key = _api_key(body.api_key)
     if not key:
         raise HTTPException(status_code=400, detail="No LLM API key configured")
+    lanes = _lanes(body.lane_config)
     jid = _new_job(user.id)
-    threading.Thread(target=_run_triage, args=(jid, user.id, key, body.candidates), daemon=True).start()
+    threading.Thread(target=_run_triage, args=(jid, user.id, key, body.candidates, lanes), daemon=True).start()
     return {"job_id": jid}
 
 

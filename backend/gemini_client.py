@@ -5,6 +5,8 @@ import time
 import math
 import secrets
 import difflib
+import threading
+from contextlib import contextmanager
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 
@@ -73,7 +75,7 @@ class ReviewVerdict(BaseModel):
 #   VAPT_REVIEW_BASE_URL VAPT_REVIEW_API_KEY VAPT_REVIEW_MODELS
 # Models are comma-separated; the lane tries each in order (fallback chain).
 # If a lane's key is unset, it falls back to the key passed into analyze_vapt_data
-# (the one entered in the UI / secret), so a single OpenRouter key drives both
+# (the one entered in the UI / secret), so a single Groq key drives both
 # lanes out of the box.
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MAIN_MODELS = ["llama-3.3-70b-versatile"]
@@ -83,12 +85,41 @@ BASE_RETRY_DELAY = 2.0              # seconds; doubled each retry
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+# Per-request lane overrides (bring-your-own key/model). Stored thread-locally so
+# concurrent jobs -- each of which runs in its own worker thread -- can never see
+# another user's provider, key, or model selection. A module-level global would
+# not be safe here.
+_lane_local = threading.local()
+
+
+@contextmanager
+def lane_config(config):
+    """Apply per-lane overrides for the duration of a call, in this thread only.
+
+    config: {"MAIN": {"base_url": ..., "api_key": ..., "models": [...]}, "REVIEW": {...}}
+    Any missing field falls through to the environment, then to the defaults.
+    Pass None or {} for the normal environment-configured behaviour.
+    """
+    previous = getattr(_lane_local, "config", None)
+    _lane_local.config = config or None
+    try:
+        yield
+    finally:
+        _lane_local.config = previous
+
+
 def _lane(prefix, default_models, default_key):
-    """Resolve (base_url, api_key, models) for a lane from env, with fallbacks."""
-    base_url = (os.environ.get(f"VAPT_{prefix}_BASE_URL") or DEFAULT_BASE_URL).strip()
-    api_key = (os.environ.get(f"VAPT_{prefix}_API_KEY") or default_key or "").strip()
-    raw = os.environ.get(f"VAPT_{prefix}_MODELS")
-    models = [m.strip() for m in raw.split(",") if m.strip()] if raw else list(default_models)
+    """Resolve (base_url, api_key, models) for a lane.
+    Precedence: per-request override > environment > built-in default."""
+    override = (getattr(_lane_local, "config", None) or {}).get(prefix) or {}
+
+    base_url = (override.get("base_url") or os.environ.get(f"VAPT_{prefix}_BASE_URL") or DEFAULT_BASE_URL).strip()
+    api_key = (override.get("api_key") or os.environ.get(f"VAPT_{prefix}_API_KEY") or default_key or "").strip()
+
+    models = [m.strip() for m in (override.get("models") or []) if m and m.strip()]
+    if not models:
+        raw = os.environ.get(f"VAPT_{prefix}_MODELS")
+        models = [m.strip() for m in raw.split(",") if m.strip()] if raw else list(default_models)
     return base_url, api_key, (models or list(default_models))
 
 
