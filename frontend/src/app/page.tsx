@@ -5,6 +5,21 @@ import { api } from "@/lib/api";
 import { Overview } from "@/lib/types";
 import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
+import ShaderField from "@/components/ShaderField";
+
+function OverviewHeader() {
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-border/60 px-6 py-8 mb-8">
+      {/* A whisper of the landing shader: static, very faint, header only. */}
+      <ShaderField intensity={0.11} animate={false} seed={8} />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-transparent" />
+      <div className="relative z-10">
+        <h1 className="text-2xl font-semibold">Overview</h1>
+        <p className="text-muted text-sm mt-1">Aggregated across all of your projects.</p>
+      </div>
+    </section>
+  );
+}
 
 type Accent = "danger" | "warn" | "accent" | undefined;
 type Row = { label: string; count: number };
@@ -24,7 +39,7 @@ export default function Dashboard() {
   if (loading || !data) {
     return (
       <div className="animate-in">
-        <h1 className="text-2xl font-semibold mb-6">Overview</h1>
+        <OverviewHeader />
         <Skeleton rows={6} />
       </div>
     );
@@ -35,7 +50,7 @@ export default function Dashboard() {
   return (
     <div className="animate-in space-y-10">
       <section>
-        <h1 className="text-2xl font-semibold mb-6">Overview</h1>
+        <OverviewHeader />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
           <Metric label="Active projects" value={data.projects} />
           <Metric label="Aggregated findings" value={data.findings} />
