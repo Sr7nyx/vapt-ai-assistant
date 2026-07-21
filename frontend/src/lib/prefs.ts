@@ -1,5 +1,6 @@
-const LEGACY_KEY = "vapt_api_key";
 const CONFIG_KEY = "vapt_llm_config";
+const REMEMBER_KEY = "vapt_llm_remember";
+const LEGACY_KEY = "vapt_api_key"; // removed on sight; never written any more
 
 export type LlmConfig = {
   baseUrl: string;
@@ -10,29 +11,83 @@ export type LlmConfig = {
 
 export const EMPTY_CONFIG: LlmConfig = { baseUrl: "", apiKey: "", mainModel: "", reviewModel: "" };
 
-export function getLlmConfig(): LlmConfig {
-  if (typeof window === "undefined") return { ...EMPTY_CONFIG };
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (raw) return { ...EMPTY_CONFIG, ...(JSON.parse(raw) as Partial<LlmConfig>) };
-  } catch {
-    // fall through to the legacy single-key storage
+type StoredConfig = { owner: string; config: LlmConfig };
+
+// The account this browser's stored configuration belongs to. Set from the live
+// session before any page reads the config, so a different account signing in on
+// the same browser can never inherit the previous account's key or models.
+let currentOwner = "";
+
+function browserStores(): Storage[] {
+  if (typeof window === "undefined") return [];
+  return [window.sessionStorage, window.localStorage];
+}
+
+function readStored(): StoredConfig | null {
+  for (const store of browserStores()) {
+    try {
+      const raw = store.getItem(CONFIG_KEY);
+      if (raw) return JSON.parse(raw) as StoredConfig;
+    } catch {
+      // corrupt entry: treat as absent
+    }
   }
-  return { ...EMPTY_CONFIG, apiKey: localStorage.getItem(LEGACY_KEY) || "" };
+  return null;
 }
 
-export function setLlmConfig(config: LlmConfig): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-  // keep the legacy key in sync so anything still reading it keeps working
-  if (config.apiKey) localStorage.setItem(LEGACY_KEY, config.apiKey);
-  else localStorage.removeItem(LEGACY_KEY);
+/** True when the user asked for the config to persist on this device. */
+export function getRemember(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(REMEMBER_KEY) === "1";
 }
 
+/** Wipe the stored configuration from both stores. */
 export function clearLlmConfig(): void {
+  for (const store of browserStores()) {
+    try {
+      store.removeItem(CONFIG_KEY);
+      store.removeItem(LEGACY_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** Bind stored configuration to the signed-in account. Idempotent, and safe to
+ *  call during render: if the stored config belongs to a different account it is
+ *  purged immediately rather than being handed to the new user. */
+export function bindSessionOwner(owner: string): void {
+  const next = owner || "";
+  if (next === currentOwner) return;
+  currentOwner = next;
+  const stored = readStored();
+  if (stored && stored.owner && next && stored.owner !== next) {
+    clearLlmConfig();
+  }
+}
+
+export function getLlmConfig(): LlmConfig {
+  const stored = readStored();
+  if (!stored) return { ...EMPTY_CONFIG };
+  // Belt and braces: never hand back another account's configuration.
+  if (stored.owner && currentOwner && stored.owner !== currentOwner) return { ...EMPTY_CONFIG };
+  return { ...EMPTY_CONFIG, ...stored.config };
+}
+
+/** Persist the configuration. Session-only by default: it lives in
+ *  sessionStorage, which is scoped to this tab and cleared when the tab closes.
+ *  `remember` opts in to localStorage on a device the user trusts. */
+export function setLlmConfig(config: LlmConfig, remember: boolean = getRemember()): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(CONFIG_KEY);
-  localStorage.removeItem(LEGACY_KEY);
+  clearLlmConfig();
+  const payload: StoredConfig = { owner: currentOwner, config };
+  const target = remember ? window.localStorage : window.sessionStorage;
+  try {
+    target.setItem(CONFIG_KEY, JSON.stringify(payload));
+    window.localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+  } catch {
+    // storage unavailable (private mode, quota): the config simply is not kept
+  }
 }
 
 export function getApiKey(): string {
@@ -62,15 +117,28 @@ export function buildLaneConfig(): Record<string, Record<string, unknown>> | und
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Clear everything sensitive this browser holds, then hand off to sign-out. */
+export function forgetSession(): void {
+  clearLlmConfig();
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(REMEMBER_KEY);
+    window.sessionStorage.removeItem(CONFIG_KEY);
+  } catch {
+    // ignore
+  }
+  currentOwner = "";
+}
+
 // Active background-job ids, persisted so a page can reconnect to a running or
 // finished job after the user navigates away and back (or refreshes).
 export function getActiveJob(slot: string): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem(`vapt_job_${slot}`) || "";
+  return window.sessionStorage.getItem(`vapt_job_${slot}`) || "";
 }
 
 export function setActiveJob(slot: string, id: string): void {
   if (typeof window === "undefined") return;
-  if (id) localStorage.setItem(`vapt_job_${slot}`, id);
-  else localStorage.removeItem(`vapt_job_${slot}`);
+  if (id) window.sessionStorage.setItem(`vapt_job_${slot}`, id);
+  else window.sessionStorage.removeItem(`vapt_job_${slot}`);
 }
