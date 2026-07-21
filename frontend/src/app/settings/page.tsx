@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { api } from "@/lib/api";
-import { getLlmConfig, setLlmConfig, clearLlmConfig, LlmConfig, EMPTY_CONFIG } from "@/lib/prefs";
+import { getLlmConfig, setLlmConfig, clearLlmConfig, getRemember, forgetSession, LlmConfig, EMPTY_CONFIG } from "@/lib/prefs";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 
@@ -27,8 +27,12 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState("");
   const [result, setResult] = useState<TestState>(null);
   const [hosts, setHosts] = useState<string[]>([]);
+  const [remember, setRemember] = useState(false);
 
-  useEffect(() => setCfg(getLlmConfig()), []);
+  useEffect(() => {
+    setCfg(getLlmConfig());
+    setRemember(getRemember());
+  }, []);
   useEffect(() => {
     if (token) api.llmProviders(token).then((r) => setHosts(r.allowed_hosts)).catch(() => {});
   }, [token]);
@@ -36,8 +40,11 @@ export default function SettingsPage() {
   const set = (patch: Partial<LlmConfig>) => setCfg((c) => ({ ...c, ...patch }));
 
   const save = () => {
-    setLlmConfig(cfg);
-    notify("Settings saved in this browser", "success");
+    setLlmConfig(cfg, remember);
+    notify(
+      remember ? "Saved on this device" : "Saved for this session only",
+      "success"
+    );
   };
 
   const loadModels = useCallback(async () => {
@@ -128,9 +135,32 @@ export default function SettingsPage() {
             onChange={(e) => set({ apiKey: e.target.value })}
           />
           <span className="text-xs text-muted">
-            Stored in this browser only and sent with each request. It is never written to the database.
+            Sent with each request and used only to call your provider. It is never written to the database
+            and never leaves your browser except to your own backend.
           </span>
         </label>
+
+        <div className="rounded-lg border border-border/60 p-3 grid gap-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            <span>
+              Remember on this device
+              <span className="block text-xs text-muted mt-0.5">
+                Off by default: your key is kept only for this browser tab and is discarded when the tab
+                closes. Turn this on only on a device you trust and do not share.
+              </span>
+            </span>
+          </label>
+          <p className="text-xs text-muted">
+            Currently: <span className="text-text">{remember ? "stored on this device" : "this session only"}</span>.
+            The configuration is tied to the signed-in account and is cleared when you sign out.
+          </p>
+        </div>
 
         <div className="flex items-center gap-2">
           <button className="btn-sm" onClick={loadModels} disabled={loadingModels}>
@@ -191,7 +221,15 @@ export default function SettingsPage() {
         <h2 className="font-semibold">Account</h2>
         <div className="text-sm text-muted">Signed in as {session?.user?.email}</div>
         <div>
-          <button className="btn-sm" onClick={() => signOut()}>Sign out</button>
+          <button
+            className="btn-sm"
+            onClick={() => {
+              forgetSession();
+              signOut();
+            }}
+          >
+            Sign out
+          </button>
         </div>
         <p className="text-xs text-muted mt-2">API: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}</p>
       </section>
