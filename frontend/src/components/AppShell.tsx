@@ -4,9 +4,18 @@ import { ReactNode } from "react";
 import Nav from "./Nav";
 import SignInGate from "./SignInGate";
 import { Spinner } from "./Loading";
+import { bindSessionOwner } from "@/lib/prefs";
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+
+  // Bind stored provider configuration to the signed-in account during render,
+  // before any child effect can read it. If the browser holds a configuration
+  // belonging to a different account, it is purged rather than inherited.
+  // bindSessionOwner is idempotent, so repeated renders are harmless.
+  if (typeof window !== "undefined" && status === "authenticated") {
+    bindSessionOwner(session?.user?.email || "");
+  }
 
   if (status === "loading") {
     return (

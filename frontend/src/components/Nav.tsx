@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { forgetSession } from "@/lib/prefs";
 import { ReactNode } from "react";
 
 const svg = (children: ReactNode) => (
@@ -68,7 +69,10 @@ export default function Nav() {
       </nav>
       <div className="mt-auto pt-4 border-t border-border/60 text-xs text-muted">
         <div className="truncate mb-2 px-1">{session?.user?.email}</div>
-        <button className="hover:text-danger transition-colors px-1" onClick={() => signOut()}>
+        <button className="hover:text-danger transition-colors px-1" onClick={() => {
+            forgetSession();
+            signOut();
+          }}>
           Sign out
         </button>
       </div>
