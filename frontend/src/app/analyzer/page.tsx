@@ -9,6 +9,7 @@ import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
+import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
 
@@ -48,6 +49,8 @@ export default function AnalyzerPage() {
   const [results, setResults] = useState<F[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [quotaTick, setQuotaTick] = useState(0);
   const handled = useRef<string | null>(null);
   const job = useJob(token, jobId);
 
@@ -81,6 +84,7 @@ export default function AnalyzerPage() {
     } else {
       notify(`Analysis failed: ${job.error || "unknown error"}`, "error");
     }
+    setQuotaTick((n) => n + 1);
     setActiveJob("analyze", "");
   }, [job, jobId, notify, applyDefaults]);
 
@@ -117,7 +121,8 @@ export default function AnalyzerPage() {
       setActiveJob("analyze", job_id);
       setJobId(job_id);
     } catch (e) {
-      notify((e as Error).message, "error");
+      if (isDemoLimit(e)) setLimitMsg((e as Error).message);
+      else notify((e as Error).message, "error");
     }
   };
 
@@ -147,6 +152,8 @@ export default function AnalyzerPage() {
   return (
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Analyzer</h1>
+
+      <DemoQuotaBanner refreshKey={quotaTick} />
 
       <div className="card grid gap-4 mb-4">
         <Field label="Project">
@@ -302,6 +309,8 @@ export default function AnalyzerPage() {
           onClose={() => setEditingIdx(null)}
         />
       )}
+
+      {limitMsg && <DemoLimitModal message={limitMsg} onClose={() => setLimitMsg(null)} />}
     </div>
   );
 }
