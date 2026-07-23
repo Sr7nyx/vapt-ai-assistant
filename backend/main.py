@@ -134,6 +134,49 @@ def _lanes(raw) -> dict:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+# Demo quota. The shared server key sits on a free provider tier, so a single
+# enthusiastic visitor could exhaust it for everyone. Runs that use the shared
+# key are capped per user over a rolling window; runs on a user's own key are
+# not counted at all, so supplying a key is the way to keep going.
+DEMO_LIMIT = int(os.environ.get("VAPT_DEMO_RUN_LIMIT", "5") or 5)
+DEMO_WINDOW_HOURS = int(os.environ.get("VAPT_DEMO_WINDOW_HOURS", "24") or 24)
+
+
+def _uses_server_key(explicit_key: Optional[str], lanes: dict) -> bool:
+    """True when this request will be billed to the server's shared key."""
+    if (explicit_key or "").strip():
+        return False
+    for cfg in (lanes or {}).values():
+        if (cfg or {}).get("api_key"):
+            return False
+    return True
+
+
+def _enforce_demo_limit(user_id: str, kind: str, explicit_key: Optional[str], lanes: dict) -> None:
+    """Raise 429 when a user has spent their shared-key allowance."""
+    if not _uses_server_key(explicit_key, lanes):
+        return
+    if DEMO_LIMIT <= 0:
+        return
+    used = store.count_demo_runs(user_id, DEMO_WINDOW_HOURS)
+    if used >= DEMO_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "demo_limit_reached",
+                "message": (
+                    f"You have used all {DEMO_LIMIT} demo runs for the shared key in the last "
+                    f"{DEMO_WINDOW_HOURS} hours. Add your own provider API key in Settings to "
+                    "continue with your own quota."
+                ),
+                "limit": DEMO_LIMIT,
+                "used": used,
+                "window_hours": DEMO_WINDOW_HOURS,
+            },
+        )
+    store.record_demo_run(user_id, kind)
+
+
 def _require_project(user: User, project_id: int) -> dict:
     project = store.get_project(user.id, project_id)
     if not project:
@@ -190,6 +233,19 @@ def me(user: User = Depends(get_current_user)):
 @app.get("/usage")
 def usage(user: User = Depends(get_current_user)):
     return store.get_usage_summary(user.id)
+
+
+@app.get("/demo/quota")
+def demo_quota(user: User = Depends(get_current_user)):
+    """Shared-key allowance for this user. Irrelevant once they supply their own
+    key, which the UI uses to decide whether to show the banner at all."""
+    used = store.count_demo_runs(user.id, DEMO_WINDOW_HOURS)
+    return {
+        "limit": DEMO_LIMIT,
+        "used": used,
+        "remaining": max(0, DEMO_LIMIT - used),
+        "window_hours": DEMO_WINDOW_HOURS,
+    }
 
 
 @app.get("/llm/providers")
@@ -432,6 +488,7 @@ def analyze(body: AnalyzeIn, user: User = Depends(get_current_user)):
     if not key:
         raise HTTPException(status_code=400, detail="No LLM API key configured")
     lanes = _lanes(body.lane_config)
+    _enforce_demo_limit(user.id, "analyze", body.api_key, lanes)
     jid = _new_job(user.id)
     threading.Thread(
         target=_run_analyze,
@@ -501,6 +558,7 @@ def scan_triage(body: TriageIn, user: User = Depends(get_current_user)):
     if not key:
         raise HTTPException(status_code=400, detail="No LLM API key configured")
     lanes = _lanes(body.lane_config)
+    _enforce_demo_limit(user.id, "triage", body.api_key, lanes)
     jid = _new_job(user.id)
     threading.Thread(target=_run_triage, args=(jid, user.id, key, body.candidates, lanes), daemon=True).start()
     return {"job_id": jid}

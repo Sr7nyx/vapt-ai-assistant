@@ -111,6 +111,15 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_usage_user ON llm_usage(user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS demo_runs (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    TEXT DEFAULT '',
+        kind       TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_demo_user_time ON demo_runs(user_id, created_at)",
 ]
 
 
@@ -470,3 +479,42 @@ def get_usage_summary(user_id):
 
 def reset_usage(user_id):
     _exec("DELETE FROM llm_usage WHERE user_id = %s", (user_id,))
+
+
+# --- Demo quota --------------------------------------------------------------
+# Only runs that consume the SERVER's shared API key are recorded here. A user
+# who brings their own key spends their own quota and is never counted, which is
+# what makes "add your own key" a real escape hatch rather than a nag.
+#
+# The counter lives in Postgres rather than memory on purpose: an in-memory
+# counter resets on every dyno restart or cold start, so anyone could refresh
+# their allowance by waiting for the server to sleep.
+
+def count_demo_runs(user_id, window_hours=24):
+    """Runs this user has made on the shared key within the rolling window."""
+    row = _one(
+        """
+        SELECT COUNT(*) AS n FROM demo_runs
+        WHERE user_id = %s AND created_at > now() - make_interval(hours => %s)
+        """,
+        (user_id, int(window_hours)),
+    )
+    return int((row or {}).get("n", 0) or 0)
+
+
+def record_demo_run(user_id, kind=""):
+    """Record one shared-key run."""
+    _exec("INSERT INTO demo_runs (user_id, kind) VALUES (%s, %s)", (user_id, kind or ""))
+
+
+def oldest_demo_run_in_window(user_id, window_hours=24):
+    """When the earliest run in the window happened, so the UI can say when the
+    allowance refreshes. Returns None if there are no runs in the window."""
+    row = _one(
+        """
+        SELECT MIN(created_at) AS oldest FROM demo_runs
+        WHERE user_id = %s AND created_at > now() - make_interval(hours => %s)
+        """,
+        (user_id, int(window_hours)),
+    )
+    return (row or {}).get("oldest")
