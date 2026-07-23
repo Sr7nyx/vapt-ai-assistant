@@ -61,6 +61,7 @@ Findings that fail any of these checks are surfaced with a verification flag ins
 - Bring your own API key for any OpenAI-compatible provider (Groq, OpenRouter, OpenAI, Together, Mistral, and more)
 - Model lists are fetched live from the provider, with a per-lane connection test so misconfiguration surfaces in a second rather than three minutes into a job
 - User-supplied provider URLs are allowlisted and SSRF-checked
+- A shared server key can be offered for demo use with a per-user rolling quota, so one visitor cannot drain a free provider tier; runs on a user's own key are unmetered
 
 ---
 
@@ -157,6 +158,8 @@ See **[DEPLOY.md](DEPLOY.md)** for a complete zero-to-production walkthrough: Go
 | `VAPT_REVIEW_MAX_FINDINGS` | Cap on findings reviewed per analysis | `12` |
 | `VAPT_TRIAGE_MAX_FINDINGS` | Cap on candidates triaged per import | `20` |
 | `VAPT_ALLOWED_LLM_HOSTS` | Extra provider hosts users may configure | built-in allowlist |
+| `VAPT_DEMO_RUN_LIMIT` | Analyses/triages per user per window on the shared key (`0` disables the cap) | `5` |
+| `VAPT_DEMO_WINDOW_HOURS` | Rolling window for the demo quota | `24` |
 | `VAPT_HTTP_TIMEOUT` | LLM request timeout, seconds | `60` |
 | `VAPT_AUTH_DISABLED` | Development only: bypass Google auth | off |
 
@@ -194,6 +197,7 @@ All endpoints require a Google ID token as `Authorization: Bearer <token>` and a
 | `POST` | `/scan/triage` | Start an AI triage job |
 | `GET` | `/jobs/{id}` | Poll a background job |
 | `POST` | `/projects/{id}/report` | Export DOCX / PDF / XLSX / JSON |
+| `GET` | `/demo/quota` | Remaining shared-key runs for this user |
 | `GET` | `/llm/providers` | Allowlisted provider hosts |
 | `POST` | `/llm/models` `/llm/test` | List a provider's models / test a lane |
 
@@ -216,9 +220,24 @@ Long-running work returns a `job_id` and is polled via `/jobs/{id}`. Jobs run in
 
 **Data handling.** Findings and their evidence are sent to whichever LLM provider you configure. Free provider tiers may retain or train on inputs. **Do not push real client or confidential engagement data through a free tier** — use a paid or private endpoint, and prefer redaction. Bring-your-own API keys are stored in your browser and sent per request; they are never written to the database.
 
-**Known limitations.** There is no per-user rate limiting, so a deployment sharing a server-side API key can have its quota consumed by authenticated users. Background jobs are held in memory and do not survive a server restart.
+**Known limitations.** Background jobs are held in memory and do not survive a server restart; the UI reconnects to a running job across navigation, but a job in flight during a redeploy is lost.
 
 ---
+
+## Testing
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+```
+
+131 offline unit tests covering the SSRF guard on user-supplied provider URLs,
+every scanner parser, risk and framework mapping, verification-signal parsing,
+and the thread isolation that keeps one user's API key out of another user's
+concurrent job. No network, database, or LLM calls: the suite runs in about a
+second. See [backend/tests/README.md](backend/tests/README.md) for what each file
+protects and which regressions are pinned.
 
 ## Project structure
 
@@ -236,6 +255,7 @@ backend/
   qa_utils.py        Verification-signal parsing
   exporter.py        DOCX / PDF / XLSX / JSON reports
   schema.sql         Postgres schema
+  tests/             Offline unit tests (pytest)
 
 frontend/
   src/app/           App Router pages: overview, projects, analyzer, import,
