@@ -5,6 +5,7 @@ import Nav from "./Nav";
 import SignInGate from "./SignInGate";
 import { Spinner } from "./Loading";
 import { bindSessionOwner } from "@/lib/prefs";
+import Onboarding from "./Onboarding";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
@@ -33,6 +34,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <main className="flex-1 min-w-0 px-6 py-10">
         <div className="mx-auto w-full max-w-5xl">{children}</div>
       </main>
+      <Onboarding />
     </div>
   );
 }
