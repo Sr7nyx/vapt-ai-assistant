@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<!-- Synthetic Burp Suite export for demonstration. All hosts are RFC 2606
+     reserved (.test) and no real system was scanned. -->
+<issues burpVersion="2025.1" exportTime="Mon Jan 05 09:14:22 GMT 2026">
+  <issue>
+    <serialNumber>1000000000000000001</serialNumber>
+    <type>1049088</type>
+    <name>SQL injection</name>
+    <host ip="203.0.113.10">https://vulnerable-demo.test</host>
+    <path>/api/v1/reports/export</path>
+    <location>/api/v1/reports/export [format parameter]</location>
+    <severity>High</severity>
+    <confidence>Firm</confidence>
+    <issueBackground>SQL injection arises when user-controllable data is incorporated into database queries.</issueBackground>
+    <issueDetail>The format parameter appears to be vulnerable to SQL injection. The payload ' OR '1'='1 was submitted and the response differed materially from the base response, and a 12 second delay was observed when a time-based payload was submitted.</issueDetail>
+    <remediationBackground>Use parameterized queries for all database access.</remediationBackground>
+    <vulnerabilityClassifications>CWE-89: Improper Neutralization of Special Elements used in an SQL Command</vulnerabilityClassifications>
+    <requestresponse>
+      <request base64="false">GET /api/v1/reports/export?format=csv'+OR+'1'='1 HTTP/1.1&#13;
+Host: vulnerable-demo.test&#13;
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.PLACEHOLDER.SIGNATURE&#13;
+&#13;
+</request>
+      <response base64="false">HTTP/1.1 200 OK&#13;
+Content-Type: application/json&#13;
+&#13;
+{"rows":[{"id":1,"email":"a@example.test"},{"id":2,"email":"b@example.test"}],"count":41827}</response>
+    </requestresponse>
+  </issue>
+
+  <issue>
+    <serialNumber>1000000000000000002</serialNumber>
+    <type>3080704</type>
+    <name>Cross-site scripting (reflected)</name>
+    <host ip="203.0.113.10">https://vulnerable-demo.test</host>
+    <path>/catalog</path>
+    <location>/catalog [q parameter]</location>
+    <severity>High</severity>
+    <confidence>Certain</confidence>
+    <issueBackground>Reflected cross-site scripting arises when data is copied from a request into the response without encoding.</issueBackground>
+    <issueDetail>The value of the q request parameter is copied into the HTML document as plain text between tags. The payload was echoed unmodified.</issueDetail>
+    <vulnerabilityClassifications>CWE-79: Improper Neutralization of Input During Web Page Generation</vulnerabilityClassifications>
+    <requestresponse>
+      <request base64="false">GET /catalog?q=%3Cscript%3Ealert(1)%3C/script%3E HTTP/1.1&#13;
+Host: vulnerable-demo.test&#13;
+&#13;
+</request>
+      <response base64="false">HTTP/1.1 200 OK&#13;
+Content-Type: text/html&#13;
+&#13;
+&lt;h2&gt;Results for &lt;script&gt;alert(1)&lt;/script&gt;&lt;/h2&gt;</response>
+    </requestresponse>
+  </issue>
+
+  <issue>
+    <serialNumber>1000000000000000003</serialNumber>
+    <type>5245344</type>
+    <name>Frameable response (potential clickjacking)</name>
+    <host ip="203.0.113.10">https://vulnerable-demo.test</host>
+    <path>/legal/terms</path>
+    <location>/legal/terms</location>
+    <severity>Low</severity>
+    <confidence>Certain</confidence>
+    <issueBackground>If a page does not set a suitable X-Frame-Options or Content-Security-Policy frame-ancestors header, it may be framed by third-party sites.</issueBackground>
+    <issueDetail>The response does not prevent framing. This page is a static terms-of-service document with no forms, no authenticated state, and no state-changing actions.</issueDetail>
+    <vulnerabilityClassifications>CWE-1021: Improper Restriction of Rendered UI Layers or Frames</vulnerabilityClassifications>
+  </issue>
+
+  <issue>
+    <serialNumber>1000000000000000004</serialNumber>
+    <type>2097408</type>
+    <name>HTTP Host header injection</name>
+    <host ip="203.0.113.10">https://vulnerable-demo.test</host>
+    <path>/assets/logo.svg</path>
+    <location>/assets/logo.svg</location>
+    <severity>Medium</severity>
+    <confidence>Tentative</confidence>
+    <issueBackground>Applications that trust the Host header may be vulnerable to cache poisoning or password-reset poisoning.</issueBackground>
+    <issueDetail>The Host header was reflected in an absolute URL in the response. The affected resource is a static, unauthenticated SVG asset served from a CDN edge; no email, redirect, or cache key is derived from the header on this path.</issueDetail>
+    <vulnerabilityClassifications>CWE-644: Improper Neutralization of HTTP Headers</vulnerabilityClassifications>
+  </issue>
+
+  <issue>
+    <serialNumber>1000000000000000005</serialNumber>
+    <type>6291456</type>
+    <name>Strict transport security not enforced</name>
+    <host ip="203.0.113.10">https://vulnerable-demo.test</host>
+    <path>/</path>
+    <location>/</location>
+    <severity>Information</severity>
+    <confidence>Certain</confidence>
+    <issueBackground>HSTS instructs browsers to interact with the site over HTTPS only.</issueBackground>
+    <issueDetail>The application does not set a Strict-Transport-Security response header.</issueDetail>
+  </issue>
+</issues>

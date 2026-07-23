@@ -1,0 +1,101 @@
+{
+  "@programName": "OWASP ZAP",
+  "@version": "2.15.0",
+  "@generated": "Mon, 5 Jan 2026 09:41:03",
+  "site": [
+    {
+      "@name": "https://vulnerable-demo.test",
+      "@host": "vulnerable-demo.test",
+      "@port": "443",
+      "@ssl": "true",
+      "alerts": [
+        {
+          "pluginid": "40018",
+          "alertRef": "40018",
+          "alert": "SQL Injection",
+          "name": "SQL Injection",
+          "riskcode": "3",
+          "confidence": "2",
+          "riskdesc": "High (Medium)",
+          "desc": "<p>SQL injection may be possible. The page results changed in a way consistent with the injected boolean condition being evaluated by the database.</p>",
+          "solution": "<p>Use parameterized queries or a vetted persistence layer. Do not concatenate user input into SQL.</p>",
+          "reference": "<p>https://owasp.org/www-community/attacks/SQL_Injection</p>",
+          "cweid": "89",
+          "wascid": "19",
+          "instances": [
+            {
+              "uri": "https://vulnerable-demo.test/api/v1/reports/export",
+              "method": "GET",
+              "param": "format",
+              "attack": "csv' AND '1'='1' -- ",
+              "evidence": "count\":41827"
+            }
+          ]
+        },
+        {
+          "pluginid": "40012",
+          "alert": "Cross Site Scripting (Reflected)",
+          "name": "Cross Site Scripting (Reflected)",
+          "riskcode": "3",
+          "confidence": "3",
+          "riskdesc": "High (High)",
+          "desc": "<p>Cross-site scripting was found. The payload was returned in the response without encoding.</p>",
+          "solution": "<p>Encode output according to context and apply a restrictive Content-Security-Policy.</p>",
+          "cweid": "79",
+          "wascid": "8",
+          "instances": [
+            {
+              "uri": "https://vulnerable-demo.test/catalog",
+              "method": "GET",
+              "param": "q",
+              "attack": "<script>alert(1)</script>",
+              "evidence": "<script>alert(1)</script>"
+            }
+          ]
+        },
+        {
+          "pluginid": "10038",
+          "alert": "Content Security Policy (CSP) Header Not Set",
+          "name": "Content Security Policy (CSP) Header Not Set",
+          "riskcode": "2",
+          "confidence": "3",
+          "riskdesc": "Medium (High)",
+          "desc": "<p>No Content-Security-Policy header was set on this response.</p>",
+          "solution": "<p>Define a Content-Security-Policy appropriate to the application.</p>",
+          "cweid": "693",
+          "instances": [
+            { "uri": "https://vulnerable-demo.test/", "method": "GET", "param": "" }
+          ]
+        },
+        {
+          "pluginid": "10021",
+          "alert": "X-Content-Type-Options Header Missing",
+          "name": "X-Content-Type-Options Header Missing",
+          "riskcode": "1",
+          "confidence": "2",
+          "riskdesc": "Low (Medium)",
+          "desc": "<p>The Anti-MIME-Sniffing header X-Content-Type-Options was not set to nosniff.</p>",
+          "solution": "<p>Set X-Content-Type-Options: nosniff on all responses.</p>",
+          "cweid": "693",
+          "instances": [
+            { "uri": "https://vulnerable-demo.test/assets/app.css", "method": "GET", "param": "" }
+          ]
+        },
+        {
+          "pluginid": "10015",
+          "alert": "Re-examine Cache-control Directives",
+          "name": "Re-examine Cache-control Directives",
+          "riskcode": "0",
+          "confidence": "1",
+          "riskdesc": "Informational (Low)",
+          "desc": "<p>The cache-control header has not been set properly, allowing the browser and proxies to cache content.</p>",
+          "solution": "<p>Set no-store for sensitive responses.</p>",
+          "cweid": "525",
+          "instances": [
+            { "uri": "https://vulnerable-demo.test/legal/terms", "method": "GET", "param": "" }
+          ]
+        }
+      ]
+    }
+  ]
+}
