@@ -137,6 +137,28 @@ npm run dev                          # http://localhost:3000
 
 For local Google sign-in, add `http://localhost:3000` as an authorized JavaScript origin and `http://localhost:3000/api/auth/callback/google` as a redirect URI on your OAuth client.
 
+### Try it with the sample data
+
+The `samples/` directory contains synthetic scanner reports and evidence, so you
+can exercise the whole flow without pointing the tool at anything real:
+
+```
+samples/burp-suite-report.xml    Burp Suite XML  -> 5 candidates
+samples/zap-report.json          OWASP ZAP JSON  -> 5 alerts
+samples/nessus-scan.nessus       Nessus          -> 5 items (1 Critical)
+samples/nmap-scan.xml            Nmap XML        -> 4 open ports
+samples/generic-findings.csv     CSV             -> 6 findings
+samples/analyzer-evidence.txt    HTTP evidence for the Analyzer
+```
+
+Upload a scanner file under **Import** and run AI triage: the set deliberately
+mixes findings with real evidence behind them against findings that only pattern
+matched, so you can see the reviewer separate the two. See
+[samples/README.md](samples/README.md) for what each file demonstrates.
+
+All hosts are RFC 2606 reserved `.test` domains and all addresses come from the
+RFC 5737 documentation ranges.
+
 ### Deployment
 
 See **[DEPLOY.md](DEPLOY.md)** for a complete zero-to-production walkthrough: Google OAuth, Supabase, the LLM provider, backend on Render, frontend on Vercel, and the cross-references between them.
@@ -256,6 +278,8 @@ backend/
   exporter.py        DOCX / PDF / XLSX / JSON reports
   schema.sql         Postgres schema
   tests/             Offline unit tests (pytest)
+
+samples/             Synthetic scanner reports and analyzer evidence
 
 frontend/
   src/app/           App Router pages: overview, projects, analyzer, import,
