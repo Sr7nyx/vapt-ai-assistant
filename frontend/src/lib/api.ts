@@ -8,13 +8,40 @@ function jsonHeaders(token: string | undefined): Record<string, string> {
   return h;
 }
 
+/** An API error that keeps the HTTP status and any structured detail, so callers
+ *  can react to specific conditions (a 429 demo limit, say) instead of matching
+ *  on message strings. */
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+  constructor(status: number, message: string, detail?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+/** FastAPI puts errors in `detail`, which may be a string or an object. */
+function readError(status: number, raw: string): ApiError {
+  try {
+    const parsed = JSON.parse(raw);
+    const detail = parsed?.detail ?? parsed;
+    const message =
+      typeof detail === "string" ? detail : detail?.message || raw || `HTTP ${status}`;
+    return new ApiError(status, message, detail);
+  } catch {
+    return new ApiError(status, raw || `HTTP ${status}`);
+  }
+}
+
 async function req<T>(token: string | undefined, method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: jsonHeaders(token),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+  if (!res.ok) throw readError(res.status, await res.text());
   const ct = res.headers.get("content-type") || "";
   return (ct.includes("application/json") ? await res.json() : ((await res.text()) as unknown)) as T;
 }
@@ -23,6 +50,8 @@ export const api = {
   me: (t: string | undefined) => req<{ id: string; email: string }>(t, "GET", "/me"),
   usage: (t: string | undefined) => req<Record<string, number>>(t, "GET", "/usage"),
   overview: (t: string | undefined) => req<Overview>(t, "GET", "/overview"),
+  demoQuota: (t: string | undefined) =>
+    req<{ limit: number; used: number; remaining: number; window_hours: number }>(t, "GET", "/demo/quota"),
 
   llmProviders: (t: string | undefined) => req<{ allowed_hosts: string[] }>(t, "GET", "/llm/providers"),
   llmModels: (t: string | undefined, body: { base_url: string; api_key: string }) =>
