@@ -46,10 +46,22 @@ _LABEL_SEVERITY = {
 
 
 def canon_severity(value):
-    """Normalize an arbitrary severity label to the app's canonical scale."""
+    """Normalize an arbitrary severity label to the app's canonical scale.
+
+    Handles ZAP's compound "risk (confidence)" form -- e.g. "High (Medium)" --
+    by reading the risk and discarding the confidence. Without this, a High ZAP
+    alert falls through to Informational and is filtered out as noise.
+    """
     v = str(value or "").strip().lower()
     if v in _LABEL_SEVERITY:
         return _LABEL_SEVERITY[v]
+    if "(" in v:
+        head = v.split("(", 1)[0].strip()
+        if head in _LABEL_SEVERITY:
+            return _LABEL_SEVERITY[head]
+        head_title = head.title()
+        if head_title in SEVERITY_CANON:
+            return head_title
     title = v.title()
     return title if title in SEVERITY_CANON else "Informational"
 
@@ -154,7 +166,10 @@ def parse_burp(root):
                 if resp:
                     evidence = (evidence + "\n\n--- Response (head) ---\n" + resp[:1500]).strip()
 
-            cwe = _first_cwe(background, name)
+            # Burp reports the CWE in vulnerabilityClassifications; check it first,
+            # then fall back to the prose fields.
+            classification = _html_to_text(_text(issue.find("vulnerabilityClassifications")))
+            cwe = _first_cwe(classification, background, name)
             cands.append(_candidate(
                 title=name, severity=severity, cwe=cwe,
                 affected_host=ip or host, affected_url=url,
