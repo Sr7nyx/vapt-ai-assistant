@@ -8,6 +8,7 @@ import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/pr
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
+import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import { verdictOf } from "@/components/Severity";
 
 type Candidate = Record<string, unknown> & {
@@ -35,6 +36,8 @@ export default function ImportPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [quotaTick, setQuotaTick] = useState(0);
   const handled = useRef<string | null>(null);
   const job = useJob(token, jobId);
 
@@ -53,6 +56,7 @@ export default function ImportPage() {
     } else {
       notify(`Triage failed: ${job.error || "unknown error"}`, "error");
     }
+    setQuotaTick((n) => n + 1);
     setActiveJob("triage", "");
   }, [job, jobId, notify]);
 
@@ -81,7 +85,8 @@ export default function ImportPage() {
       setActiveJob("triage", job_id);
       setJobId(job_id);
     } catch (e) {
-      notify((e as Error).message, "error");
+      if (isDemoLimit(e)) setLimitMsg((e as Error).message);
+      else notify((e as Error).message, "error");
     }
   };
 
@@ -115,6 +120,8 @@ export default function ImportPage() {
   return (
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Import scan</h1>
+
+      <DemoQuotaBanner refreshKey={quotaTick} />
 
       <div className="card grid gap-3 mb-4">
         <input type="file" multiple accept=".xml,.nessus,.json,.csv" className="text-sm" onChange={(e) => setFiles(e.target.files)} />
@@ -188,6 +195,8 @@ export default function ImportPage() {
           </div>
         </>
       )}
+
+      {limitMsg && <DemoLimitModal message={limitMsg} onClose={() => setLimitMsg(null)} />}
     </div>
   );
 }
