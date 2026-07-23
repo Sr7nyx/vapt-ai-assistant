@@ -125,7 +125,7 @@ export default function SettingsPage() {
           {hosts.length > 0 && <span className="text-xs text-muted">Allowed provider hosts: {hosts.join(", ")}</span>}
         </label>
 
-        <label className="grid gap-1.5">
+        <label className="grid gap-1.5" data-tour="api-key">
           <span className="text-sm text-muted">Your API key</span>
           <input
             className="input"
@@ -220,6 +220,20 @@ export default function SettingsPage() {
       <section className="card grid gap-2">
         <h2 className="font-semibold">Account</h2>
         <div className="text-sm text-muted">Signed in as {session?.user?.email}</div>
+        <button
+          className="btn-sm w-fit"
+          onClick={() => {
+            try {
+              const raw = localStorage.getItem("vapt_onboarded");
+              const seen: string[] = raw ? JSON.parse(raw) : [];
+              const owner = session?.user?.email || "";
+              localStorage.setItem("vapt_onboarded", JSON.stringify(seen.filter((o) => o !== owner)));
+            } catch {}
+            location.reload();
+          }}
+        >
+          Replay welcome tour
+        </button>
         <div>
           <button
             className="btn-sm"
