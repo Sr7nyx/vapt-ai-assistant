@@ -142,3 +142,31 @@ export function setActiveJob(slot: string, id: string): void {
   if (id) window.sessionStorage.setItem(`vapt_job_${slot}`, id);
   else window.sessionStorage.removeItem(`vapt_job_${slot}`);
 }
+
+// First-run onboarding: shown once per account on this browser. Persistent
+// (localStorage) so it does not reappear every new tab, but keyed by account so
+// a different user on the same browser still gets welcomed.
+export function hasSeenOnboarding(owner: string): boolean {
+  if (typeof window === "undefined" || !owner) return true;
+  try {
+    const raw = window.localStorage.getItem("vapt_onboarded");
+    const seen: string[] = raw ? JSON.parse(raw) : [];
+    return seen.includes(owner);
+  } catch {
+    return false;
+  }
+}
+
+export function markOnboarded(owner: string): void {
+  if (typeof window === "undefined" || !owner) return;
+  try {
+    const raw = window.localStorage.getItem("vapt_onboarded");
+    const seen: string[] = raw ? JSON.parse(raw) : [];
+    if (!seen.includes(owner)) {
+      seen.push(owner);
+      window.localStorage.setItem("vapt_onboarded", JSON.stringify(seen));
+    }
+  } catch {
+    // ignore
+  }
+}
