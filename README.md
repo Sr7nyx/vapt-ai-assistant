@@ -66,8 +66,6 @@ Findings that fail any of these checks are surfaced with a verification flag ins
 ---
 
 ## Architecture
-
-```
 ![VAPT Console Architecture](samples/architecture.svg)
 ```
 
