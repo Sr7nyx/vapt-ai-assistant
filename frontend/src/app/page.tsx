@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { Overview } from "@/lib/types";
 import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
+import { SeverityBar, BarList, Panel } from "@/components/Charts";
 import ShaderField from "@/components/ShaderField";
 
 function OverviewHeader() {
@@ -61,6 +62,10 @@ export default function Dashboard() {
 
       <section>
         <h2 className="text-lg font-semibold mb-4">Findings breakdown</h2>
+        <div className="card mb-4">
+          <div className="text-sm font-medium mb-3">Severity distribution</div>
+          <SeverityBar rows={data.by_severity} />
+        </div>
         <div className="grid md:grid-cols-3 gap-4">
           <MiniTable title="By severity" col="Severity" rows={data.by_severity} colorSeverity />
           <MiniTable title="By status" col="Status" rows={data.by_status} />
@@ -86,7 +91,18 @@ export default function Dashboard() {
           <Metric label="Moderate" value={data.risk_priorities.Moderate ?? 0} accent="accent" />
           <Metric label="Low" value={data.risk_priorities.Low ?? 0} />
         </div>
-        <MiniTable title="OWASP Top 10:2025 coverage" col="OWASP 2025 category" rows={data.owasp_coverage} countLabel="Findings" />
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Panel
+            title="OWASP Top 10:2025 coverage"
+            subtitle="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
+          >
+            <BarList
+              rows={data.owasp_coverage}
+              emphasise={(label) => label !== "Unmapped (assign manually)"}
+            />
+          </Panel>
+          <MiniTable title="Coverage detail" col="OWASP 2025 category" rows={data.owasp_coverage} countLabel="Findings" />
+        </div>
       </section>
 
       <section>
