@@ -119,3 +119,67 @@ def qa_flag_text(finding):
     summary = summarize_qa(finding)
     parts = list(summary["intel"]) + list(summary["warnings"]) + list(summary["cautions"])
     return "; ".join(parts)
+
+
+# --- Structured review summary ------------------------------------------------
+# The skeptical reviewer writes its verdict into additional_remarks as prose, which
+# is fine for a report but leaves the UI with nothing to render but a bare verdict
+# label. Parsing it back into fields lets the reviewer's actual reasoning -- why a
+# finding was doubted, what evidence is still missing -- reach the person triaging,
+# rather than only the person who downloads the report.
+
+_REVIEW_PATTERNS = {
+    "verdict": r'Skeptical review - verdict:\s*"([^"]*)"',
+    "confidence": r"confidence:\s*([^,)]+)",
+    "false_positive_risk": r"false-positive risk:\s*([^)]+)\)",
+    "reviewer_severity": r'Reviewer severity:\s*"([^"]*)"',
+    "exploitability": r'exploitability:\s*"([^"]*)"',
+    "reasoning": r"Reasoning:\s*(.+?)(?=\n\s*(?:-|Evidence still needed:|REVIEWER DISAGREES)|\Z)",
+    "evidence_needed": r"Evidence still needed:\s*(.+?)(?=\n\s*-|\Z)",
+}
+
+
+def review_summary(finding):
+    """Parse the reviewer's remarks into fields the interface can render.
+
+    Combines the skeptical reviewer's verdict with the deterministic QA signals so
+    a caller has one object describing how much to trust the finding.
+    """
+    text = str((finding or {}).get("additional_remarks", "") or "")
+    qa = summarize_qa(finding)
+
+    out = {
+        "reviewed": False,
+        "unavailable": "",
+        "verdict": "",
+        "confidence": "",
+        "false_positive_risk": "",
+        "reviewer_severity": "",
+        "exploitability": "",
+        "reasoning": "",
+        "evidence_needed": "",
+        "severity_disagreement": False,
+        "grounding": qa.get("grounding", ""),
+        "injection": bool(qa.get("injection")),
+        "severity_mismatch": bool(qa.get("severity_mismatch")),
+        "warnings": list(qa.get("warnings") or []),
+        "cautions": list(qa.get("cautions") or []),
+        "level": qa.get("level", "none"),
+    }
+    if not text:
+        return out
+
+    skipped = re.search(r"- Skeptical review:\s*(unavailable|skipped)\s*\(([^)]*)\)", text, re.I)
+    if skipped:
+        out["unavailable"] = f"{skipped.group(1).strip()}: {skipped.group(2).strip()}"
+
+    for key, pattern in _REVIEW_PATTERNS.items():
+        match = re.search(pattern, text, re.I | re.S)
+        if match:
+            value = match.group(1).strip().rstrip(".").strip()
+            if value and value.lower() not in ("none", "null", ""):
+                out[key] = value
+
+    out["severity_disagreement"] = bool(re.search(r"REVIEWER DISAGREES ON SEVERITY", text, re.I))
+    out["reviewed"] = bool(out["verdict"])
+    return out

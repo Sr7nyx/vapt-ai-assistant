@@ -13,6 +13,8 @@ import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQ
 import LaneStatus from "@/components/LaneStatus";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
+import ReviewPanel, { VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
+import { ReviewSummary } from "@/lib/types";
 
 const ANALYSIS_TYPES = [
   "OWASP Top 10 Analysis",
@@ -277,24 +279,29 @@ export default function AnalyzerPage() {
             </button>
           </div>
           {results.map((f, i) => (
-            <div key={i} className="card card-hover flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
-                  <span className="font-medium">{f.title as string}</span>
+            <div key={i} className="card card-hover grid gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
+                    <span className="font-medium">{f.title as string}</span>
+                    <VerdictChip review={f._review as ReviewSummary | undefined} />
+                    <ReviewFlag review={f._review as ReviewSummary | undefined} />
+                  </div>
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {typeof f.cwe === "string" && f.cwe && <span className="chip">{f.cwe}</span>}
+                    {typeof f.category === "string" && f.category && <span className="chip">{f.category}</span>}
+                    {typeof f.status === "string" && f.status && <span className="chip">{f.status}</span>}
+                  </div>
+                  {typeof f.description === "string" && f.description && (
+                    <p className="text-sm text-muted mt-2 line-clamp-3">{f.description}</p>
+                  )}
                 </div>
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {typeof f.cwe === "string" && f.cwe && <span className="chip">{f.cwe}</span>}
-                  {typeof f.category === "string" && f.category && <span className="chip">{f.category}</span>}
-                  {typeof f.status === "string" && f.status && <span className="chip">{f.status}</span>}
-                </div>
-                {typeof f.description === "string" && f.description && (
-                  <p className="text-sm text-muted mt-2 line-clamp-3">{f.description}</p>
-                )}
+                <button className="btn-sm shrink-0" onClick={() => setEditingIdx(i)}>
+                  Edit
+                </button>
               </div>
-              <button className="btn-sm shrink-0" onClick={() => setEditingIdx(i)}>
-                Edit
-              </button>
+              <ReviewPanel review={f._review as ReviewSummary | undefined} />
             </div>
           ))}
         </div>

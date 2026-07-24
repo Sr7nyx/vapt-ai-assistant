@@ -21,6 +21,7 @@ export interface Finding {
   description?: string;
   additional_remarks?: string;
   _assessment?: { risk?: { priority?: string; score?: number }; frameworks?: Record<string, string> };
+  _review?: ReviewSummary;
   [k: string]: unknown;
 }
 
@@ -63,4 +64,23 @@ export interface LaneInfo {
   key_configured: boolean;
   key_source: string;
   overridden: boolean;
+}
+
+export interface ReviewSummary {
+  reviewed: boolean;
+  unavailable: string;
+  verdict: string;
+  confidence: string;
+  false_positive_risk: string;
+  reviewer_severity: string;
+  exploitability: string;
+  reasoning: string;
+  evidence_needed: string;
+  severity_disagreement: boolean;
+  grounding: string;
+  injection: boolean;
+  severity_mismatch: boolean;
+  warnings: string[];
+  cautions: string[];
+  level: string;
 }

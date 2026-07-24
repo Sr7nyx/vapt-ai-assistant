@@ -441,14 +441,19 @@ def delete_project(project_id: int, user: User = Depends(get_current_user)):
     return {"ok": True}
 
 
+def _annotate(findings):
+    """Attach risk, framework, and reviewer assessments to findings for display."""
+    for f in findings or []:
+        f["_assessment"] = risk_map.assess(f)
+        f["_review"] = qa_utils.review_summary(f)
+    return findings
+
+
 # --- Findings ----------------------------------------------------------------
 @app.get("/projects/{project_id}/findings")
 def list_findings(project_id: int, user: User = Depends(get_current_user)):
     _require_project(user, project_id)
-    findings = store.get_findings_by_project(user.id, project_id)
-    for f in findings:
-        f["_assessment"] = risk_map.assess(f)
-    return findings
+    return _annotate(store.get_findings_by_project(user.id, project_id))
 
 
 @app.post("/projects/{project_id}/findings")
@@ -524,7 +529,7 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
             store.record_usage_batch(user_id, usage_records)
         except Exception:
             pass
-        job["result"] = findings
+        job["result"] = _annotate(findings)
         job["status"] = "done"
         job["progress"] = 1.0
         job["stage"] = "Complete"
@@ -594,7 +599,7 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
             store.record_usage_batch(user_id, usage_records)
         except Exception:
             pass
-        job["result"] = result
+        job["result"] = _annotate(result) if isinstance(result, list) else result
         job["status"] = "done"
         job["progress"] = 1.0
         job["stage"] = "Complete"
