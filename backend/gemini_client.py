@@ -109,13 +109,41 @@ def lane_config(config):
         _lane_local.config = previous
 
 
+def _lane_base_url(prefix):
+    override = (getattr(_lane_local, "config", None) or {}).get(prefix) or {}
+    return (override.get("base_url") or os.environ.get(f"VAPT_{prefix}_BASE_URL") or DEFAULT_BASE_URL).strip()
+
+
+def _shares_provider_with_main(prefix, base_url):
+    """Whether this lane talks to the same host as the extraction lane.
+
+    A key is only meaningful at the provider that issued it, so the shared-key
+    fallback must not cross provider boundaries.
+    """
+    if prefix == "MAIN":
+        return True
+    try:
+        return urlparse(base_url).hostname == urlparse(_lane_base_url("MAIN")).hostname
+    except Exception:
+        return False
+
+
 def _lane(prefix, default_models, default_key):
     """Resolve (base_url, api_key, models) for a lane.
-    Precedence: per-request override > environment > built-in default."""
+    Precedence: per-request override > environment > built-in default.
+
+    The fallback to the caller's/extraction key applies only when the lane points
+    at the same provider as extraction. Sending a Groq key to Cerebras because a
+    lane-specific key was not set produces a 401 deep inside a job, which is a
+    confusing way to learn about a missing environment variable.
+    """
     override = (getattr(_lane_local, "config", None) or {}).get(prefix) or {}
 
     base_url = (override.get("base_url") or os.environ.get(f"VAPT_{prefix}_BASE_URL") or DEFAULT_BASE_URL).strip()
-    api_key = (override.get("api_key") or os.environ.get(f"VAPT_{prefix}_API_KEY") or default_key or "").strip()
+
+    api_key = (override.get("api_key") or os.environ.get(f"VAPT_{prefix}_API_KEY") or "").strip()
+    if not api_key and _shares_provider_with_main(prefix, base_url):
+        api_key = (default_key or "").strip()
 
     models = [m.strip() for m in (override.get("models") or []) if m and m.strip()]
     if not models:
@@ -141,6 +169,7 @@ def describe_lanes(default_key=""):
             "model": models[0] if models else "",
             "fallbacks": list(models[1:]),
             "key_configured": bool(key),
+            "shares_main_provider": _shares_provider_with_main(name, base_url),
         }
     return lanes
 

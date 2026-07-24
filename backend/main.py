@@ -266,7 +266,16 @@ def llm_lanes(body: LanesIn, user: User = Depends(get_current_user)):
         resolved = gemini_client.describe_lanes(server_key)
     for name, info in resolved.items():
         supplied = bool((lanes.get(name) or {}).get("api_key"))
-        info["key_source"] = "your key" if supplied else ("server key" if info["key_configured"] else "none")
+        if supplied:
+            info["key_source"] = "your key"
+        elif info["key_configured"]:
+            info["key_source"] = "server key"
+        elif not info.get("shares_main_provider", True):
+            # A different provider with no key of its own: name the variable that
+            # is missing rather than leaving a bare 401 to be decoded later.
+            info["key_source"] = f"missing (set VAPT_{name}_API_KEY for {info['provider']})"
+        else:
+            info["key_source"] = "none"
         info["overridden"] = bool(lanes.get(name))
     return {"lanes": resolved}
 
