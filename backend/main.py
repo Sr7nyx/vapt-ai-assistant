@@ -31,6 +31,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 import requests
+from urllib.parse import urlparse
 from openai import OpenAI
 
 import gemini_client
@@ -82,6 +83,8 @@ class ProviderIn(BaseModel):
     base_url: str
     api_key: str
     model: Optional[str] = None
+    lane: Optional[str] = None
+    lane_config: Optional[Dict[str, "LaneCfgIn"]] = None
 
 
 class AnalyzeIn(BaseModel):
@@ -331,9 +334,27 @@ def llm_test(body: ProviderIn, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(exc))
     if not body.model:
         raise HTTPException(status_code=400, detail="A model is required to test.")
-    key = (body.api_key or "").strip() or os.environ.get("VAPT_MAIN_API_KEY", "")
+    # Resolve the key exactly as the pipeline would for this lane. Falling back to
+    # the extraction key regardless of lane would test the reviewer's provider with
+    # the extraction provider's credential and report a false failure.
+    lane = (body.lane or "").strip().upper()
+    key = (body.api_key or "").strip()
+    if not key and lane in ("MAIN", "REVIEW"):
+        defaults = (
+            gemini_client.DEFAULT_MAIN_MODELS if lane == "MAIN" else gemini_client.DEFAULT_REVIEW_MODELS
+        )
+        with gemini_client.lane_config(_lanes(body.lane_config)):
+            _, key, _ = gemini_client._lane(lane, defaults, os.environ.get("VAPT_MAIN_API_KEY", ""))
     if not key:
-        raise HTTPException(status_code=400, detail="An API key is required to test.")
+        key = os.environ.get("VAPT_MAIN_API_KEY", "") if lane not in ("MAIN", "REVIEW") else ""
+    if not key:
+        detail = (
+            f"No API key is configured for the {lane.lower()} lane at {urlparse(base_url).hostname}. "
+            f"Set VAPT_{lane}_API_KEY, or enter a key in Settings."
+            if lane in ("MAIN", "REVIEW")
+            else "An API key is required to test."
+        )
+        raise HTTPException(status_code=400, detail=detail)
     try:
         client = OpenAI(base_url=base_url, api_key=key, timeout=25.0, max_retries=0)
         completion = client.chat.completions.create(

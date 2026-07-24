@@ -58,7 +58,10 @@ export const api = {
     req<{ lanes: Record<string, LaneInfo> }>(t, "POST", "/llm/lanes", body),
   llmModels: (t: string | undefined, body: { base_url: string; api_key: string }) =>
     req<{ models: string[] }>(t, "POST", "/llm/models", body),
-  llmTest: (t: string | undefined, body: { base_url: string; api_key: string; model: string }) =>
+  llmTest: (
+    t: string | undefined,
+    body: { base_url: string; api_key: string; model: string; lane?: string; lane_config?: unknown }
+  ) =>
     req<{ ok: boolean; model: string; reply?: string; error?: string }>(t, "POST", "/llm/test", body),
 
   listProjects: (t: string | undefined) => req<Project[]>(t, "GET", "/projects"),

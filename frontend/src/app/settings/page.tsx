@@ -75,7 +75,12 @@ export default function SettingsPage() {
     setTesting(lane);
     setResult(null);
     try {
-      const r = await api.llmTest(token, { base_url: cfg.baseUrl.trim(), api_key: cfg.apiKey.trim(), model: model.trim() });
+      const r = await api.llmTest(token, {
+        base_url: cfg.baseUrl.trim(),
+        api_key: cfg.apiKey.trim(),
+        model: model.trim(),
+        lane: lane === "Extraction" ? "MAIN" : "REVIEW",
+      });
       setResult({
         lane,
         ok: r.ok,

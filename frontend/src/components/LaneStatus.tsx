@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { LaneInfo } from "@/lib/types";
-import { buildLaneConfig, getLlmConfig } from "@/lib/prefs";
+import { buildLaneConfig } from "@/lib/prefs";
 import { Spinner } from "./Loading";
 
 type Health = "unknown" | "checking" | "ok" | "failed";
@@ -37,10 +37,15 @@ export default function LaneStatus() {
     setHealth((h) => ({ ...h, [key]: "checking" }));
     setErrors((e) => ({ ...e, [key]: "" }));
     try {
+      // Name the lane and pass the same overrides the pipeline receives, so the
+      // key is resolved for THIS lane rather than defaulting to the extraction
+      // provider's credential.
       const r = await api.llmTest(token, {
         base_url: info.base_url,
-        api_key: getLlmConfig().apiKey.trim(),
+        api_key: "",
         model: info.model,
+        lane: key,
+        lane_config: buildLaneConfig(),
       });
       setHealth((h) => ({ ...h, [key]: r.ok ? "ok" : "failed" }));
       if (!r.ok) setErrors((e) => ({ ...e, [key]: r.error || "unknown error" }));

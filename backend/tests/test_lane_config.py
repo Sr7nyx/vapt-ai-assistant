@@ -172,3 +172,34 @@ class TestCrossProviderKeyIsolation:
         ):
             _, key, _ = gemini_client._lane("REVIEW", gemini_client.DEFAULT_REVIEW_MODELS, "groq-key")
         assert key == "explicit"
+
+
+class TestLaneKeyResolutionForDiagnostics:
+    """A connection test must use the key belonging to the lane it is testing.
+
+    Regression: the test endpoint fell back to the extraction key for every lane,
+    so checking a reviewer hosted at a second provider sent the extraction
+    provider's credential and reported a 401 that said nothing about the real
+    configuration.
+    """
+
+    def test_review_lane_resolves_its_own_key(self, monkeypatch):
+        monkeypatch.setenv("VAPT_MAIN_BASE_URL", "https://api.groq.com/openai/v1")
+        monkeypatch.setenv("VAPT_MAIN_API_KEY", "groq-key")
+        monkeypatch.setenv("VAPT_REVIEW_BASE_URL", "https://api.cerebras.ai/v1")
+        monkeypatch.setenv("VAPT_REVIEW_API_KEY", "cerebras-key")
+        _, key, _ = gemini_client._lane(
+            "REVIEW", gemini_client.DEFAULT_REVIEW_MODELS, "groq-key"
+        )
+        assert key == "cerebras-key"
+
+    def test_review_lane_without_its_own_key_resolves_to_nothing(self, monkeypatch):
+        """Better to report an unconfigured lane than to test one provider with
+        another provider's key."""
+        monkeypatch.setenv("VAPT_MAIN_BASE_URL", "https://api.groq.com/openai/v1")
+        monkeypatch.setenv("VAPT_REVIEW_BASE_URL", "https://api.cerebras.ai/v1")
+        monkeypatch.delenv("VAPT_REVIEW_API_KEY", raising=False)
+        _, key, _ = gemini_client._lane(
+            "REVIEW", gemini_client.DEFAULT_REVIEW_MODELS, "groq-key"
+        )
+        assert key == ""
