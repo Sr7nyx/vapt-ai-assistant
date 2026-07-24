@@ -178,6 +178,7 @@ See **[DEPLOY.md](DEPLOY.md)** for a complete zero-to-production walkthrough: Go
 | `VAPT_MAIN_BASE_URL` / `VAPT_MAIN_MODELS` | Extraction lane endpoint and model chain | Groq / `llama-3.3-70b-versatile` |
 | `VAPT_REVIEW_BASE_URL` / `VAPT_REVIEW_API_KEY` / `VAPT_REVIEW_MODELS` | Reviewer lane overrides | inherits main / `openai/gpt-oss-120b` |
 | `VAPT_REVIEW_MAX_FINDINGS` | Cap on findings reviewed per analysis | `12` |
+| `VAPT_REVIEW_INPUT_CHARS` | Characters of the original input given to the reviewer per finding (`0` sends all of it) | `4000` |
 | `VAPT_TRIAGE_MAX_FINDINGS` | Cap on candidates triaged per import | `20` |
 | `VAPT_ALLOWED_LLM_HOSTS` | Extra provider hosts users may configure | built-in allowlist |
 | `VAPT_DEMO_RUN_LIMIT` | Analyses/triages per user per window on the shared key (`0` disables the cap) | `5` |
@@ -197,6 +198,32 @@ Model chains are comma-separated and tried in order, so a rate-limited or unavai
 | `AUTH_URL` | Canonical app URL (production) |
 
 ---
+
+## Running on free provider tiers
+
+The reviewer lane is the expensive one, and it is **token**-bound rather than
+request-bound: it is called once per finding, so a large evidence file would
+otherwise be re-sent for every finding under review. Two things keep that
+affordable.
+
+**Split the lanes across providers.** Extraction and review each take their own
+base URL and key, and each provider meters its own quota, so pointing the two
+lanes at different providers roughly multiplies the available headroom. Pairing a
+fast model for extraction with a stronger reasoning model on a second provider
+for review also improves the review pass, which is the one that most affects
+output quality.
+
+**Send the reviewer only what it needs.** Each review receives the slice of the
+original input that bears on that finding rather than the whole file, located by
+the finding's own evidence, URL, and parameter. On a 50k-character input this cuts
+the reviewer lane by roughly 9x. Inputs already within `VAPT_REVIEW_INPUT_CHARS`
+are passed through untouched, and when an excerpt is used the reviewer is told so
+explicitly, so trimmed context is never mistaken for missing evidence.
+
+Free tiers are generally funded by training on submitted prompts. That is the
+practical reason to use a paid or private endpoint for anything that is not
+synthetic: findings and their evidence are exactly the material that should not
+enter someone else's training corpus.
 
 ## API
 

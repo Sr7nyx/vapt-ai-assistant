@@ -8,6 +8,8 @@ import { Spinner } from "@/components/Loading";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
+  { label: "Cerebras", url: "https://api.cerebras.ai/v1" },
+  { label: "Google AI Studio", url: "https://generativelanguage.googleapis.com/v1beta/openai" },
   { label: "OpenRouter", url: "https://openrouter.ai/api/v1" },
   { label: "OpenAI", url: "https://api.openai.com/v1" },
   { label: "Together", url: "https://api.together.xyz/v1" },
@@ -97,6 +99,11 @@ export default function SettingsPage() {
           <h2 className="font-semibold">Model configuration</h2>
           <p className="text-muted text-sm mt-1">
             The pipeline uses two model lanes. Leave anything blank to fall back to the server configuration.
+          </p>
+          <p className="text-muted text-sm mt-2">
+            Each lane has its own provider quota, so pointing them at different providers roughly multiplies
+            your free-tier headroom. A common split is a fast model for extraction and a stronger reasoning
+            model on a separate provider for review.
           </p>
         </div>
 
