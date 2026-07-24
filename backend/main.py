@@ -248,6 +248,29 @@ def demo_quota(user: User = Depends(get_current_user)):
     }
 
 
+class LanesIn(BaseModel):
+    lane_config: Optional[Dict[str, LaneCfgIn]] = None
+
+
+@app.post("/llm/lanes")
+def llm_lanes(body: LanesIn, user: User = Depends(get_current_user)):
+    """Which provider and model each lane will actually use for this caller.
+
+    Resolution is delegated to the client module so the reported configuration
+    cannot drift from the one the pipeline uses. No key is ever returned, only
+    whether one is present and where it came from.
+    """
+    lanes = _lanes(body.lane_config)
+    server_key = os.environ.get("VAPT_MAIN_API_KEY", "")
+    with gemini_client.lane_config(lanes):
+        resolved = gemini_client.describe_lanes(server_key)
+    for name, info in resolved.items():
+        supplied = bool((lanes.get(name) or {}).get("api_key"))
+        info["key_source"] = "your key" if supplied else ("server key" if info["key_configured"] else "none")
+        info["overridden"] = bool(lanes.get(name))
+    return {"lanes": resolved}
+
+
 @app.get("/llm/providers")
 def llm_providers(user: User = Depends(get_current_user)):
     """Provider hosts this server will call. User-supplied base URLs are

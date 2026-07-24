@@ -53,3 +53,14 @@ export interface Overview {
     by_model: { model: string; calls: number; total_tokens: number }[];
   };
 }
+
+export interface LaneInfo {
+  provider: string;
+  base_url: string;
+  models: string[];
+  model: string;
+  fallbacks: string[];
+  key_configured: boolean;
+  key_source: string;
+  overridden: boolean;
+}

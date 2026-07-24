@@ -10,6 +10,7 @@ import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
+import LaneStatus from "@/components/LaneStatus";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
 
@@ -153,6 +154,7 @@ export default function AnalyzerPage() {
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Analyzer</h1>
 
+      <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
       <div className="card grid gap-4 mb-4">

@@ -7,6 +7,7 @@ import secrets
 import difflib
 import threading
 from contextlib import contextmanager
+from urllib.parse import urlparse
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 
@@ -121,6 +122,27 @@ def _lane(prefix, default_models, default_key):
         raw = os.environ.get(f"VAPT_{prefix}_MODELS")
         models = [m.strip() for m in raw.split(",") if m.strip()] if raw else list(default_models)
     return base_url, api_key, (models or list(default_models))
+
+
+def describe_lanes(default_key=""):
+    """Resolved configuration for both lanes, with no secrets in the result.
+
+    Uses the same _lane() resolution the pipeline uses, so what is displayed
+    cannot drift from what actually runs. Call inside a lane_config() context to
+    see the effect of a caller's overrides.
+    """
+    lanes = {}
+    for name, defaults in (("MAIN", DEFAULT_MAIN_MODELS), ("REVIEW", DEFAULT_REVIEW_MODELS)):
+        base_url, key, models = _lane(name, defaults, default_key)
+        lanes[name] = {
+            "provider": (urlparse(base_url).hostname or base_url),
+            "base_url": base_url,
+            "models": list(models),
+            "model": models[0] if models else "",
+            "fallbacks": list(models[1:]),
+            "key_configured": bool(key),
+        }
+    return lanes
 
 
 def _http_timeout():

@@ -9,6 +9,7 @@ import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
+import LaneStatus from "@/components/LaneStatus";
 import { verdictOf } from "@/components/Severity";
 
 type Candidate = Record<string, unknown> & {
@@ -121,6 +122,7 @@ export default function ImportPage() {
     <div className="animate-in">
       <h1 className="text-2xl font-semibold mb-6">Import scan</h1>
 
+      <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
       <div className="card grid gap-3 mb-4">

@@ -1,4 +1,4 @@
-import { Project, Finding, Job, Overview } from "./types";
+import { Project, Finding, Job, Overview, LaneInfo } from "./types";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
@@ -54,6 +54,8 @@ export const api = {
     req<{ limit: number; used: number; remaining: number; window_hours: number }>(t, "GET", "/demo/quota"),
 
   llmProviders: (t: string | undefined) => req<{ allowed_hosts: string[] }>(t, "GET", "/llm/providers"),
+  llmLanes: (t: string | undefined, body: { lane_config?: unknown }) =>
+    req<{ lanes: Record<string, LaneInfo> }>(t, "POST", "/llm/lanes", body),
   llmModels: (t: string | undefined, body: { base_url: string; api_key: string }) =>
     req<{ models: string[] }>(t, "POST", "/llm/models", body),
   llmTest: (t: string | undefined, body: { base_url: string; api_key: string; model: string }) =>

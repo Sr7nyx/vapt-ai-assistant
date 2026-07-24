@@ -151,3 +151,38 @@ class TestBudgetConfiguration:
     def test_invalid_budget_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv("VAPT_REVIEW_INPUT_CHARS", "not-a-number")
         assert gemini_client._review_input_budget() == 4000
+
+
+class TestLaneDescription:
+    """The status bar must report what will actually run, and must never carry a key."""
+
+    def test_reports_provider_and_model_per_lane(self, monkeypatch):
+        monkeypatch.setenv("VAPT_MAIN_BASE_URL", "https://api.groq.com/openai/v1")
+        monkeypatch.setenv("VAPT_MAIN_MODELS", "llama-3.3-70b-versatile")
+        monkeypatch.setenv("VAPT_REVIEW_BASE_URL", "https://api.cerebras.ai/v1")
+        monkeypatch.setenv("VAPT_REVIEW_MODELS", "gpt-oss-120b,zai-glm-4.7")
+        lanes = gemini_client.describe_lanes("server-key")
+        assert lanes["MAIN"]["provider"] == "api.groq.com"
+        assert lanes["MAIN"]["model"] == "llama-3.3-70b-versatile"
+        assert lanes["REVIEW"]["provider"] == "api.cerebras.ai"
+        assert lanes["REVIEW"]["model"] == "gpt-oss-120b"
+        assert lanes["REVIEW"]["fallbacks"] == ["zai-glm-4.7"]
+
+    def test_never_returns_a_key(self, monkeypatch):
+        monkeypatch.setenv("VAPT_MAIN_API_KEY", "sk-super-secret")
+        blob = repr(gemini_client.describe_lanes("another-secret"))
+        assert "sk-super-secret" not in blob
+        assert "another-secret" not in blob
+
+    def test_reports_whether_a_key_is_present(self, monkeypatch):
+        monkeypatch.delenv("VAPT_MAIN_API_KEY", raising=False)
+        monkeypatch.delenv("VAPT_REVIEW_API_KEY", raising=False)
+        assert gemini_client.describe_lanes("")["MAIN"]["key_configured"] is False
+        assert gemini_client.describe_lanes("a-key")["MAIN"]["key_configured"] is True
+
+    def test_reflects_a_caller_override(self):
+        """What the bar shows has to track the user's own configuration, not just
+        the server's."""
+        with gemini_client.lane_config({"REVIEW": {"models": ["zai-glm-4.7"]}}):
+            lanes = gemini_client.describe_lanes("k")
+        assert lanes["REVIEW"]["model"] == "zai-glm-4.7"
