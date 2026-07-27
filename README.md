@@ -192,14 +192,6 @@ See **[DEPLOY.md](DEPLOY.md)** for a complete zero-to-production walkthrough: Go
 | `VAPT_MAIN_API_KEY` | LLM key; drives both lanes unless a lane sets its own | required |
 | `VAPT_MAIN_BASE_URL` / `VAPT_MAIN_MODELS` | Extraction lane endpoint and model chain | Groq / `llama-3.3-70b-versatile` |
 | `VAPT_REVIEW_BASE_URL` / `VAPT_REVIEW_API_KEY` / `VAPT_REVIEW_MODELS` | Reviewer lane overrides | inherits main / `openai/gpt-oss-120b` |
-
-The reviewer lane inherits the extraction key only when both lanes point at the
-same provider. If `VAPT_REVIEW_BASE_URL` names a different host, set
-`VAPT_REVIEW_API_KEY` as well: a key issued by one provider is not valid at
-another, and the lane is treated as unconfigured rather than sending it across.
-Model identifiers are provider-specific too, so the same model may be
-`openai/gpt-oss-120b` at one provider and `gpt-oss-120b` at another.
-
 | `VAPT_REVIEW_MAX_FINDINGS` | Cap on findings reviewed per analysis | `12` |
 | `VAPT_REVIEW_INPUT_CHARS` | Characters of the original input given to the reviewer per finding (`0` sends all of it) | `4000` |
 | `VAPT_AUTO_STATUS` | Let the verdict engine set a finding's status when confident (`0` to disable) | `1` |
@@ -209,6 +201,13 @@ Model identifiers are provider-specific too, so the same model may be
 | `VAPT_DEMO_WINDOW_HOURS` | Rolling window for the demo quota | `24` |
 | `VAPT_HTTP_TIMEOUT` | LLM request timeout, seconds | `60` |
 | `VAPT_AUTH_DISABLED` | Development only: bypass Google auth | off |
+
+The reviewer lane inherits the extraction key only when both lanes point at the
+same provider. If `VAPT_REVIEW_BASE_URL` names a different host, set
+`VAPT_REVIEW_API_KEY` as well: a key issued by one provider is not valid at
+another, and the lane is treated as unconfigured rather than sending it across.
+Model identifiers are provider-specific too, so the same model may be
+`openai/gpt-oss-120b` at one provider and `gpt-oss-120b` at another.
 
 Model chains are comma-separated and tried in order, so a rate-limited or unavailable model falls through to the next.
 
