@@ -2,7 +2,8 @@
 
 Fast, offline unit tests for the parts of the pipeline where a silent failure
 would be most damaging: the SSRF guard, the scanner parsers, risk and framework
-mapping, verification-signal parsing, and per-request model isolation.
+mapping, verification-signal parsing, reviewer evidence slicing, the deterministic
+verdict engine, and per-request model isolation.
 
 ```bash
 cd backend
@@ -11,7 +12,7 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second.
+inline in the test file. The suite runs in about a second. **184 tests.**
 
 ## What each file covers
 
@@ -19,24 +20,49 @@ inline in the test file. The suite runs in about a second.
 | --- | --- | --- |
 | `test_llm_config.py` | Provider allowlist, https-only, credential rejection, private/loopback/metadata address blocking, lane-config sanitizing | Users supply their own provider URL, which makes the server issue outbound requests to a user-controlled host. Unconstrained, that is an SSRF primitive. |
 | `test_scan_import.py` | Burp, ZAP, Nessus, Nmap, and CSV parsing; severity normalization; CWE extraction; dedup; noise summary; malformed input | Parsers take untrusted scanner output. A wrong severity or a fabricated CWE propagates all the way into a client report. |
-| `test_risk_map.py` | CVSS computation, risk priority, OWASP/PCI/CWE/ATT&CK mapping | CVSS is computed in code, not taken from the model. Findings with no reliable signal must stay explicitly unmapped rather than be guessed. |
-| `test_qa_utils.py` | Evidence-grounding, severity-mismatch, prompt-injection, and reviewer-verdict parsing | These signals are what stop an unverified finding from reaching a report looking like a fact. |
-| `test_lane_config.py` | Lane resolution precedence and thread isolation | Jobs run in worker threads carrying different users' API keys. A module-global override would let one user's key bill another user's job. |
+| `test_risk_map.py` | CVSS computation, risk priority, KEV escalation, OWASP/PCI/CWE/ATT&CK mapping | CVSS is computed in code, not taken from the model. Findings with no reliable signal must stay explicitly unmapped rather than be guessed. |
+| `test_qa_utils.py` | Evidence-grounding, severity-mismatch, prompt-injection, reviewer-verdict, and review-summary parsing | These signals are what stop an unverified finding from reaching a report looking like a fact. |
+| `test_review_slice.py` | Reviewer evidence slicing and the excerpt disclosure | The reviewer sees only the input slice bearing on a finding; the slice must keep that finding's own evidence, and the reviewer must be told when it is an excerpt so trimmed context is not read as missing evidence. |
+| `test_verdict_engine.py` | Deterministic status + confidence, and the asymmetric guardrails | Confidence must be earned from signals agreeing, never manufactured. A well-evidenced finding must never be auto-dismissed, and an ungrounded one never auto-confirmed. |
+| `test_lane_config.py` | Lane resolution precedence, thread isolation, cross-provider key isolation | Jobs run in worker threads carrying different users' API keys; a module-global override, or a key reused across providers, would send one credential where another belongs. |
 
-`test_lane_config.py` imports the LLM client, which needs `pydantic` and the
-OpenAI SDK from `requirements.txt`; it skips cleanly if they are absent.
+`test_review_slice.py` and `test_lane_config.py` import the LLM client, which
+needs `pydantic` and the OpenAI SDK from `requirements.txt`; they skip cleanly if
+those are absent.
 
 ## Regressions pinned here
 
-Two parser bugs were found while writing these tests and are now pinned:
+Bugs found while writing these tests, now pinned so they cannot return quietly:
 
 - **ZAP severity collapse.** ZAP writes `riskdesc` as `"High (Medium)"` (risk and
   confidence together). Normalizing the whole string fell through to
-  `Informational`, quietly demoting every High alert into the noise bucket that
-  the import filter hides by default.
+  `Informational`, quietly demoting every High alert into the noise bucket the
+  import filter hides by default.
 - **Burp CWE loss.** Burp reports the CWE in `vulnerabilityClassifications`,
   which the parser did not read, so Burp findings arrived with no CWE and were
-  therefore left unmapped to OWASP, PCI, and ATT&CK.
+  left unmapped to OWASP, PCI, and ATT&CK.
+- **Cross-provider key leak.** Setting the reviewer lane to a second provider
+  without its own key fell back to the extraction key, sending (for example) a
+  Groq key to Cerebras -- a 401 surfaced mid-job instead of a clear missing-config
+  message. The key now stays within its provider.
+- **Wrong lane's key in the connection test.** `/llm/test` resolved the key as
+  the extraction key regardless of the lane under test, so checking the reviewer
+  reported a false 401. It now resolves the tested lane's own key.
+
+## The evaluation harness
+
+The verdict engine also has a labelled evaluation in `eval/` (repo root), run
+separately:
+
+```bash
+cd eval
+pytest                 # smoke test + the no-dangerous-dismissal gate
+python run_eval.py      # precision / recall / FP-reduction / grounding accuracy
+```
+
+It scores the deterministic decision layer against a hand-labelled set with 95%
+Wilson intervals, and exits non-zero if the engine ever dismisses a real finding.
+See `eval/README.md` for what it does and does not measure.
 
 ## Conventions
 
