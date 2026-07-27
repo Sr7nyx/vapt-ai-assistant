@@ -96,23 +96,7 @@ non-zero if the engine ever dismisses a real finding.
 ---
 
 ## Architecture
-
-```
-┌──────────────────────┐   Google ID token    ┌──────────────────────┐
-│  Next.js frontend    │ ───────────────────► │  FastAPI backend     │
-│  Vercel              │                      │  Render / Fly / VPS  │
-│  Auth.js (Google)    │ ◄─────────────────── │  per-user scoping    │
-│  Tailwind            │      JSON / files    │  background jobs     │
-└──────────────────────┘                      └──────────┬───────────┘
-                                                         │
-                                        ┌────────────────┴────────────────┐
-                                        │                                 │
-                              ┌─────────▼─────────┐          ┌────────────▼────────────┐
-                              │ Supabase Postgres │          │ OpenAI-compatible LLM   │
-                              │ projects/findings │          │ extraction + reviewer   │
-                              └───────────────────┘          └─────────────────────────┘
-```
-
+![VAPT Console Architecture](samples/architecture.svg)
 The backend runs as a **persistent server**, not serverless: analysis and triage make multiple reasoning-model calls and run for minutes in background threads, which serverless platforms terminate. The frontend is static-friendly and deploys anywhere.
 
 **Multi-tenancy:** every project and finding is owned by a Google `sub`, and every query is scoped to the authenticated user. Finding operations are authorized through the parent project, so no account can read or write another's data.
