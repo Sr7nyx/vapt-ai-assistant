@@ -21,10 +21,40 @@ This tool treats the model as a fast, tireless junior analyst whose every claim 
 | **Adversarial review pass** | A second, reasoning-grade model argues the skeptical case — could this be a false positive? what benign explanation fits the same evidence? — and returns a verdict. |
 | **Prompt-injection handling** | Scanner output and target responses are untrusted input. They are fenced, and the model is instructed to treat them as data, not instructions. |
 | **Severity cross-check** | Model-assigned severity is compared against the computed CVSS band, and disagreements are flagged rather than silently resolved. |
+| **Deterministic verdict** | The reviewer's hedged signals are combined by a fixed rule into a status and a confidence score. Confidence is earned by signals agreeing, not by asking the model to sound certain, and genuinely ambiguous findings are held for review rather than forced. |
 
 Findings that fail any of these checks are surfaced with a verification flag instead of being quietly dressed up as facts.
 
 ---
+
+## From signals to a verdict
+
+The skeptical reviewer does not get the last word. It produces signals -- an
+evidence-grounding level, an exploitability judgement, a false-positive risk, a
+verdict, a confidence -- and a deterministic engine combines those into one of
+three outcomes:
+
+- **Confirmed**, when the evidence is grounded and exploitability is demonstrated
+- **False Positive**, when the signals point clearly that way and the evidence
+  does not hold up
+- **Need Review**, when the signals conflict or are weak
+
+The confidence attached to a decision comes from how strongly and consistently the
+signals agree, computed by a fixed rule -- not from instructing the model to be
+decisive. Two guardrails encode the asymmetric cost of mistakes in security work:
+a finding with no grounding is never auto-confirmed, and a well-evidenced finding
+is never auto-dismissed, even if the reviewer wavers. When those rules conflict
+with the score, the finding is held for review, because forcing a verdict onto
+ambiguous evidence is the failure this tool exists to prevent.
+
+Findings that clear the bar have their status set automatically (this can be
+disabled with `VAPT_AUTO_STATUS=0`); a status a human or a retest has already set
+is never overwritten.
+
+The [`eval/`](eval/) directory holds a labelled set and a harness that scores this
+engine on precision, recall, false-positive reduction, and evidence-grounding
+accuracy, each with a 95% Wilson interval. It runs offline and gates CI, exiting
+non-zero if the engine ever dismisses a real finding.
 
 ## Screenshots
 
@@ -66,8 +96,22 @@ Findings that fail any of these checks are surfaced with a verification flag ins
 ---
 
 ## Architecture
-![VAPT Console Architecture](samples/architecture.svg)
 
+```
+┌──────────────────────┐   Google ID token    ┌──────────────────────┐
+│  Next.js frontend    │ ───────────────────► │  FastAPI backend     │
+│  Vercel              │                      │  Render / Fly / VPS  │
+│  Auth.js (Google)    │ ◄─────────────────── │  per-user scoping    │
+│  Tailwind            │      JSON / files    │  background jobs     │
+└──────────────────────┘                      └──────────┬───────────┘
+                                                         │
+                                        ┌────────────────┴────────────────┐
+                                        │                                 │
+                              ┌─────────▼─────────┐          ┌────────────▼────────────┐
+                              │ Supabase Postgres │          │ OpenAI-compatible LLM   │
+                              │ projects/findings │          │ extraction + reviewer   │
+                              └───────────────────┘          └─────────────────────────┘
+```
 
 The backend runs as a **persistent server**, not serverless: analysis and triage make multiple reasoning-model calls and run for minutes in background threads, which serverless platforms terminate. The frontend is static-friendly and deploys anywhere.
 
@@ -163,8 +207,16 @@ See **[DEPLOY.md](DEPLOY.md)** for a complete zero-to-production walkthrough: Go
 | `VAPT_MAIN_API_KEY` | LLM key; drives both lanes unless a lane sets its own | required |
 | `VAPT_MAIN_BASE_URL` / `VAPT_MAIN_MODELS` | Extraction lane endpoint and model chain | Groq / `llama-3.3-70b-versatile` |
 | `VAPT_REVIEW_BASE_URL` / `VAPT_REVIEW_API_KEY` / `VAPT_REVIEW_MODELS` | Reviewer lane overrides | inherits main / `openai/gpt-oss-120b` |
+
+The reviewer lane inherits the extraction key only when both lanes point at the
+same provider. If `VAPT_REVIEW_BASE_URL` names a different host, set
+`VAPT_REVIEW_API_KEY` as well: a key issued by one provider is not valid at
+another, and the lane is treated as unconfigured rather than sending it across.
+Model identifiers are provider-specific too, so the same model may be
+`openai/gpt-oss-120b` at one provider and `gpt-oss-120b` at another.
 | `VAPT_REVIEW_MAX_FINDINGS` | Cap on findings reviewed per analysis | `12` |
 | `VAPT_REVIEW_INPUT_CHARS` | Characters of the original input given to the reviewer per finding (`0` sends all of it) | `4000` |
+| `VAPT_AUTO_STATUS` | Let the verdict engine set a finding's status when confident (`0` to disable) | `1` |
 | `VAPT_TRIAGE_MAX_FINDINGS` | Cap on candidates triaged per import | `20` |
 | `VAPT_ALLOWED_LLM_HOSTS` | Extra provider hosts users may configure | built-in allowlist |
 | `VAPT_DEMO_RUN_LIMIT` | Analyses/triages per user per window on the shared key (`0` disables the cap) | `5` |
@@ -198,6 +250,13 @@ lanes at different providers roughly multiplies the available headroom. Pairing 
 fast model for extraction with a stronger reasoning model on a second provider
 for review also improves the review pass, which is the one that most affects
 output quality.
+
+The Analyzer and Import pages show a status bar with the provider and model each
+lane will actually use, resolved through the same code path the pipeline uses, so
+the display cannot drift from reality. A **Check** button sends one tiny
+completion per lane to confirm the endpoint answers; it is manual rather than
+automatic, because firing two calls on every page load would spend quota to draw
+a green dot.
 
 **Send the reviewer only what it needs.** Each review receives the slice of the
 original input that bears on that finding rather than the whole file, located by
@@ -234,6 +293,7 @@ All endpoints require a Google ID token as `Authorization: Bearer <token>` and a
 | `POST` | `/projects/{id}/report` | Export DOCX / PDF / XLSX / JSON |
 | `GET` | `/demo/quota` | Remaining shared-key runs for this user |
 | `GET` | `/llm/providers` | Allowlisted provider hosts |
+| `POST` | `/llm/lanes` | Resolved provider and model per lane (no keys returned) |
 | `POST` | `/llm/models` `/llm/test` | List a provider's models / test a lane |
 
 Long-running work returns a `job_id` and is polled via `/jobs/{id}`. Jobs run in background threads and survive page navigation; the UI reconnects to a running job when you return.
@@ -267,10 +327,12 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest
 ```
 
-131 offline unit tests covering the SSRF guard on user-supplied provider URLs,
+184 offline unit tests covering the SSRF guard on user-supplied provider URLs,
 every scanner parser, risk and framework mapping, verification-signal parsing,
-and the thread isolation that keeps one user's API key out of another user's
-concurrent job. No network, database, or LLM calls: the suite runs in about a
+the thread isolation that keeps one user's API key out of another user's
+concurrent job, and the deterministic verdict engine. A separate labelled
+evaluation in `eval/` scores the verdict engine's precision, recall, and
+false-positive reduction. No network, database, or LLM calls: the suite runs in about a
 second. See [backend/tests/README.md](backend/tests/README.md) for what each file
 protects and which regressions are pinned.
 
@@ -291,6 +353,9 @@ backend/
   exporter.py        DOCX / PDF / XLSX / JSON reports
   schema.sql         Postgres schema
   tests/             Offline unit tests (pytest)
+  verdict_engine.py  Deterministic status + confidence from reviewer signals
+
+eval/                Labelled set + harness: precision, recall, FP reduction
 
 samples/             Synthetic scanner reports and analyzer evidence
 

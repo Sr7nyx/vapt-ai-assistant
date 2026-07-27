@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/Loading";
 import FindingEditor from "@/components/FindingEditor";
 import RetestModal from "@/components/RetestModal";
 import MultiSelect from "@/components/MultiSelect";
-import ReviewPanel, { VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
+import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
 
 const SEV_ORDER = ["Critical", "High", "Medium", "Low", "Informational"];
 
@@ -165,6 +165,7 @@ export default function FindingsPage() {
                       <span className="font-medium truncate flex-1">{f.title}</span>
                       {asset && <span className="text-accent text-xs truncate max-w-[240px] hidden lg:inline">{asset}</span>}
                       <span className="flex gap-1 shrink-0">
+                        <VerdictBadge verdict={f._verdict} />
                         <VerdictChip review={f._review} />
                         <ReviewFlag review={f._review} />
                       </span>
@@ -186,7 +187,7 @@ export default function FindingsPage() {
                             {asset}
                           </a>
                         )}
-                        <ReviewPanel review={f._review} />
+                        <ReviewPanel review={f._review} verdict={f._verdict} />
                         {typeof f.description === "string" && f.description && <Detail label="Description">{f.description}</Detail>}
                         {typeof f.evidence === "string" && f.evidence && <Detail label="Evidence" mono>{f.evidence}</Detail>}
                         {typeof f.remediation === "string" && f.remediation && <Detail label="Remediation">{f.remediation}</Detail>}

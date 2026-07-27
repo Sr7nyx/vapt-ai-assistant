@@ -39,6 +39,7 @@ import llm_config
 import scan_import
 import risk_map
 import qa_utils
+import verdict_engine
 import exporter
 from collections import Counter
 import pg_store as store
@@ -441,11 +442,25 @@ def delete_project(project_id: int, user: User = Depends(get_current_user)):
     return {"ok": True}
 
 
-def _annotate(findings):
-    """Attach risk, framework, and reviewer assessments to findings for display."""
+def _annotate(findings, set_status=False):
+    """Attach risk, framework, and reviewer assessments, and the deterministic
+    verdict resolution.
+
+    set_status controls whether the resolver may change the finding's status:
+      - True  for fresh analyze/triage output, where the resolved status is the
+        engine's proposal and is what gets committed.
+      - False when listing findings already stored, where the status is whatever
+        was committed or a human later set; here the resolution is shown for
+        transparency but must not overwrite the stored value on every fetch.
+    """
     for f in findings or []:
         f["_assessment"] = risk_map.assess(f)
-        f["_review"] = qa_utils.review_summary(f)
+        review = qa_utils.review_summary(f)
+        f["_review"] = review
+        if set_status:
+            verdict_engine.apply_resolution(f, review)  # sets f["_verdict"], may set f["status"]
+        else:
+            f["_verdict"] = verdict_engine.resolve_verdict(f, review)
     return findings
 
 
@@ -529,7 +544,7 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
             store.record_usage_batch(user_id, usage_records)
         except Exception:
             pass
-        job["result"] = _annotate(findings)
+        job["result"] = _annotate(findings, set_status=True)
         job["status"] = "done"
         job["progress"] = 1.0
         job["stage"] = "Complete"
@@ -599,7 +614,7 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
             store.record_usage_batch(user_id, usage_records)
         except Exception:
             pass
-        job["result"] = _annotate(result) if isinstance(result, list) else result
+        job["result"] = _annotate(result, set_status=True) if isinstance(result, list) else result
         job["status"] = "done"
         job["progress"] = 1.0
         job["stage"] = "Complete"

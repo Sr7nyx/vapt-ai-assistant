@@ -1,0 +1,136 @@
+{
+  "_about": "Labelled evaluation set for the deterministic verdict engine. Each case carries the reviewer signals a competent skeptical reviewer would produce for the described scenario, plus ground-truth labels. All scenarios are synthetic (RFC 2606 / RFC 5737). This is an illustrative methodology demonstration on a small hand-labelled set, not a published benchmark; metrics are reported with 95% Wilson intervals precisely because the sample is small.",
+  "_label_schema": {
+    "truth": "true_positive | false_positive  -- ground truth for the finding",
+    "truth_grounding": "VERIFIED | PARTIAL | UNVERIFIED | NO EVIDENCE  -- what the evidence actually supports",
+    "review": "the reviewer signals fed to the engine"
+  },
+  "cases": [
+    {
+      "id": "tp-sqli-differential",
+      "title": "SQL injection with differential and timing evidence",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated by differential responses and a time-based delay", "false_positive_risk": "Low", "confidence": "High", "verdict": "Confirmed"}
+    },
+    {
+      "id": "tp-idor-two-accounts",
+      "title": "IDOR proven with two provisioned accounts",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated cross-account read", "false_positive_risk": "Low", "confidence": "High", "verdict": "Confirmed"}
+    },
+    {
+      "id": "tp-ssrf-metadata",
+      "title": "SSRF returning cloud metadata content",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated retrieval of instance metadata", "false_positive_risk": "Low", "confidence": "High", "verdict": "Likely Valid"}
+    },
+    {
+      "id": "tp-jwt-alg-none",
+      "title": "JWT alg=none accepted on an admin endpoint",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated admin access with an unsigned token", "false_positive_risk": "Low", "confidence": "High", "verdict": "Confirmed"}
+    },
+    {
+      "id": "tp-stored-xss",
+      "title": "Stored XSS executing in a second session",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated script execution in a victim session", "false_positive_risk": "Low", "confidence": "High", "verdict": "Confirmed"}
+    },
+    {
+      "id": "tp-partial-idor-single",
+      "title": "IDOR observed but only from one account",
+      "truth": "true_positive",
+      "truth_grounding": "PARTIAL",
+      "review": {"reviewed": true, "grounding": "PARTIAL", "exploitability": "Demonstrated for one object; broader access not yet shown", "false_positive_risk": "Low", "confidence": "Medium", "verdict": "Likely Valid"}
+    },
+    {
+      "id": "fp-clickjacking-static",
+      "title": "Frameable static terms page (clickjacking)",
+      "truth": "false_positive",
+      "truth_grounding": "UNVERIFIED",
+      "review": {"reviewed": true, "grounding": "UNVERIFIED", "exploitability": "No demonstrated impact; static page with no forms or auth state", "false_positive_risk": "High", "confidence": "High", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "fp-hosthdr-cdn",
+      "title": "Host-header reflection on a static CDN asset",
+      "truth": "false_positive",
+      "truth_grounding": "UNVERIFIED",
+      "review": {"reviewed": true, "grounding": "UNVERIFIED", "exploitability": "Theoretical; no cache key or redirect derived from the header", "false_positive_risk": "High", "confidence": "High", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "fp-dirlisting-empty",
+      "title": "Directory listing on an empty directory",
+      "truth": "false_positive",
+      "truth_grounding": "UNVERIFIED",
+      "review": {"reviewed": true, "grounding": "UNVERIFIED", "exploitability": "Theoretical; directory contained no files", "false_positive_risk": "High", "confidence": "Medium", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "fp-missing-header-static",
+      "title": "Missing security header on a static asset",
+      "truth": "false_positive",
+      "truth_grounding": "NO EVIDENCE",
+      "review": {"reviewed": true, "grounding": "NO EVIDENCE", "exploitability": "Theoretical; informational best-practice note", "false_positive_risk": "High", "confidence": "High", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "fp-server-version",
+      "title": "Server version banner disclosure",
+      "truth": "false_positive",
+      "truth_grounding": "NO EVIDENCE",
+      "review": {"reviewed": true, "grounding": "NO EVIDENCE", "exploitability": "Theoretical; no exploit follows from a version string", "false_positive_risk": "High", "confidence": "Medium", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "fp-tls10-compensated",
+      "title": "TLS 1.0 enabled but unreachable by policy",
+      "truth": "false_positive",
+      "truth_grounding": "UNVERIFIED",
+      "review": {"reviewed": true, "grounding": "UNVERIFIED", "exploitability": "Theoretical; a compensating control blocks the path", "false_positive_risk": "High", "confidence": "Medium", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "amb-open-redirect",
+      "title": "Open redirect with unclear exploit path",
+      "truth": "true_positive",
+      "truth_grounding": "PARTIAL",
+      "review": {"reviewed": true, "grounding": "PARTIAL", "exploitability": "Plausible; redirect works but no phishing chain shown", "false_positive_risk": "Medium", "confidence": "Medium", "verdict": "Needs More Evidence"}
+    },
+    {
+      "id": "amb-verbose-error",
+      "title": "Verbose error message, impact unclear",
+      "truth": "false_positive",
+      "truth_grounding": "PARTIAL",
+      "review": {"reviewed": true, "grounding": "PARTIAL", "exploitability": "Plausible information disclosure; nothing sensitive shown yet", "false_positive_risk": "Medium", "confidence": "Low", "verdict": "Needs More Evidence"}
+    },
+    {
+      "id": "amb-cors-wildcard",
+      "title": "CORS wildcard with credentials, unproven impact",
+      "truth": "true_positive",
+      "truth_grounding": "PARTIAL",
+      "review": {"reviewed": true, "grounding": "PARTIAL", "exploitability": "Plausible; reflects origin with credentials but no data exfil shown", "false_positive_risk": "Medium", "confidence": "Medium", "verdict": "Needs More Evidence"}
+    },
+    {
+      "id": "poison-injected-instructions",
+      "title": "Scanner output contains injected instructions",
+      "truth": "false_positive",
+      "truth_grounding": "UNVERIFIED",
+      "review": {"reviewed": true, "grounding": "UNVERIFIED", "exploitability": "Theoretical", "false_positive_risk": "High", "confidence": "Low", "verdict": "Likely False Positive", "injection": true}
+    },
+    {
+      "id": "tp-idor-verified-conflict",
+      "title": "Well-evidenced IDOR the reviewer wrongly doubts",
+      "truth": "true_positive",
+      "truth_grounding": "VERIFIED",
+      "review": {"reviewed": true, "grounding": "VERIFIED", "exploitability": "Demonstrated cross-account read", "false_positive_risk": "High", "confidence": "Low", "verdict": "Likely False Positive"}
+    },
+    {
+      "id": "unreviewed-pending",
+      "title": "Finding not yet reviewed (cap reached)",
+      "truth": "true_positive",
+      "truth_grounding": "PARTIAL",
+      "review": {"reviewed": false}
+    }
+  ]
+}

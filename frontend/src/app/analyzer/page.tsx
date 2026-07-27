@@ -13,8 +13,8 @@ import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQ
 import LaneStatus from "@/components/LaneStatus";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
-import ReviewPanel, { VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
-import { ReviewSummary } from "@/lib/types";
+import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
+import { ReviewSummary, VerdictResolution } from "@/lib/types";
 
 const ANALYSIS_TYPES = [
   "OWASP Top 10 Analysis",
@@ -285,6 +285,7 @@ export default function AnalyzerPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
                     <span className="font-medium">{f.title as string}</span>
+                    <VerdictBadge verdict={f._verdict as VerdictResolution | undefined} />
                     <VerdictChip review={f._review as ReviewSummary | undefined} />
                     <ReviewFlag review={f._review as ReviewSummary | undefined} />
                   </div>
@@ -301,7 +302,7 @@ export default function AnalyzerPage() {
                   Edit
                 </button>
               </div>
-              <ReviewPanel review={f._review as ReviewSummary | undefined} />
+              <ReviewPanel review={f._review as ReviewSummary | undefined} verdict={f._verdict as VerdictResolution | undefined} />
             </div>
           ))}
         </div>

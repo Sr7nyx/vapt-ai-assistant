@@ -22,6 +22,7 @@ export interface Finding {
   additional_remarks?: string;
   _assessment?: { risk?: { priority?: string; score?: number }; frameworks?: Record<string, string> };
   _review?: ReviewSummary;
+  _verdict?: VerdictResolution;
   [k: string]: unknown;
 }
 
@@ -83,4 +84,13 @@ export interface ReviewSummary {
   warnings: string[];
   cautions: string[];
   level: string;
+}
+
+export interface VerdictResolution {
+  resolved_status: string;
+  confidence: number;
+  confidence_label: string;
+  rationale: string;
+  signals: Record<string, unknown>;
+  auto_set: boolean;
 }

@@ -1,5 +1,5 @@
 "use client";
-import { ReviewSummary } from "@/lib/types";
+import { ReviewSummary, VerdictResolution } from "@/lib/types";
 
 const VERDICT_TONE: Record<string, string> = {
   "likely false positive": "border-danger/60 text-danger",
@@ -10,6 +10,25 @@ const VERDICT_TONE: Record<string, string> = {
 
 function tone(verdict: string) {
   return VERDICT_TONE[verdict.trim().toLowerCase()] || "border-border text-muted";
+}
+
+/** The engine's resolved status with its confidence -- the decisive output, as
+ *  opposed to the reviewer's hedged verdict. */
+export function VerdictBadge({ verdict }: { verdict?: VerdictResolution }) {
+  if (!verdict) return null;
+  const s = verdict.resolved_status;
+  const tone =
+    s === "Confirmed" ? "border-accent/60 text-accent"
+    : s === "False Positive" ? "border-danger/60 text-danger"
+    : "border-border text-muted";
+  return (
+    <span className={`chip ${tone}`} title={verdict.rationale}>
+      {s}
+      {verdict.confidence > 0 && s !== "Need Review" && (
+        <span className="opacity-70"> {Math.round(verdict.confidence * 100)}%</span>
+      )}
+    </span>
+  );
 }
 
 /** Compact verdict chip for list rows. */
@@ -40,10 +59,18 @@ export function ReviewFlag({ review }: { review?: ReviewSummary }) {
 /** The reviewer's assessment in full: what it concluded, why, and what would
  *  change its mind. Previously this reasoning existed only in exported reports,
  *  so the person doing triage in the app could see a verdict but never its basis. */
-export default function ReviewPanel({ review }: { review?: ReviewSummary }) {
-  if (!review) return null;
+export default function ReviewPanel({
+  review,
+  verdict,
+}: {
+  review?: ReviewSummary;
+  verdict?: VerdictResolution;
+}) {
+  if (!review && !verdict) return null;
 
-  if (!review.reviewed) {
+  // The "not reviewed" note only applies when there is a review object and no
+  // verdict to show; with a verdict present we render the resolution instead.
+  if (review && !review.reviewed && !verdict) {
     if (review.unavailable) {
       return (
         <div className="rounded-lg border border-border/60 px-3 py-2 text-xs text-muted">
@@ -56,13 +83,36 @@ export default function ReviewPanel({ review }: { review?: ReviewSummary }) {
 
   return (
     <div className="rounded-lg border border-border/60 overflow-hidden">
+      {verdict && (
+        <div className="px-3 py-2 border-b border-border/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <VerdictBadge verdict={verdict} />
+            <span className="text-xs text-muted">
+              {verdict.confidence_label} confidence
+              {verdict.auto_set && verdict.resolved_status !== "Need Review" ? " - status set automatically" : ""}
+            </span>
+          </div>
+          {verdict.confidence > 0 && (
+            <div className="mt-2 h-1 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${verdict.resolved_status === "False Positive" ? "bg-danger" : verdict.resolved_status === "Confirmed" ? "bg-accent" : "bg-muted/50"}`}
+                style={{ width: `${Math.max(4, verdict.confidence * 100)}%` }}
+              />
+            </div>
+          )}
+          <p className="text-xs text-muted mt-1.5">{verdict.rationale}</p>
+        </div>
+      )}
+      {review?.reviewed && (
       <div className="px-3 py-2 border-b border-border/60 flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted uppercase tracking-wide">Skeptical review</span>
         {review.reviewed && <span className={`chip ${tone(review.verdict)}`}>{review.verdict}</span>}
         {review.confidence && <span className="chip">confidence: {review.confidence}</span>}
         {review.false_positive_risk && <span className="chip">FP risk: {review.false_positive_risk}</span>}
       </div>
+      )}
 
+      {review && (
       <div className="px-3 py-2 grid gap-2 text-sm">
         {review.severity_disagreement && review.reviewer_severity && (
           <div className="text-warn text-xs">
@@ -102,6 +152,7 @@ export default function ReviewPanel({ review }: { review?: ReviewSummary }) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
