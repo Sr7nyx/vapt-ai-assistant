@@ -199,6 +199,7 @@ same provider. If `VAPT_REVIEW_BASE_URL` names a different host, set
 another, and the lane is treated as unconfigured rather than sending it across.
 Model identifiers are provider-specific too, so the same model may be
 `openai/gpt-oss-120b` at one provider and `gpt-oss-120b` at another.
+
 | `VAPT_REVIEW_MAX_FINDINGS` | Cap on findings reviewed per analysis | `12` |
 | `VAPT_REVIEW_INPUT_CHARS` | Characters of the original input given to the reviewer per finding (`0` sends all of it) | `4000` |
 | `VAPT_AUTO_STATUS` | Let the verdict engine set a finding's status when confident (`0` to disable) | `1` |
