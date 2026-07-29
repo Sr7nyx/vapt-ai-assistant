@@ -4,15 +4,41 @@
 
 :root {
   color-scheme: dark;
+  /* One knob for the phosphor. Swap this to #e5a04c for amber or #5fb3ac for the
+     previous teal; every accent in the interface follows. */
+  --phosphor: 126, 231, 135;
 }
 
 body {
   background:
-    radial-gradient(1100px 560px at 100% -10%, rgba(95, 179, 172, 0.06), transparent 55%),
-    #0f1216;
-  color: #dde3ea;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+    radial-gradient(900px 480px at 100% -10%, rgba(var(--phosphor), 0.05), transparent 55%),
+    #0a0e0c;
+  color: #cfe0d2;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* A very faint scanline wash. Deliberately near-invisible: it should read as
+   texture on a dark panel, never as interference over body text. Disabled for
+   anyone who has asked for reduced motion, since fine repeating patterns are a
+   common trigger. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.012) 0px,
+    rgba(255, 255, 255, 0.012) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after { display: none; }
 }
 
 @keyframes fadeIn {
@@ -27,33 +53,83 @@ body {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
 
 @layer components {
   .input {
-    @apply bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none w-full transition-all;
+    @apply bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none w-full transition-all font-mono;
   }
   .input:focus {
     @apply border-accent;
-    box-shadow: 0 0 0 3px rgba(95, 179, 172, 0.12);
+    box-shadow: 0 0 0 2px rgba(var(--phosphor), 0.15);
   }
+
+  /* Interactive elements are bracketed, the way a terminal marks an actionable
+     token. Buttons whose label is an icon opt out with .btn-icon. */
   .btn {
-    @apply bg-accent text-black font-medium px-4 py-2 rounded-lg text-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
+    @apply bg-transparent border border-accent text-accent font-medium px-3 py-1.5 rounded-lg text-sm tracking-wide transition-all
+           hover:bg-accent hover:text-black active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-sm {
-    @apply border border-border text-sm px-3 py-1.5 rounded-lg transition-all hover:border-accent hover:text-text active:scale-[0.98] disabled:opacity-40;
+    @apply border border-border text-sm px-2.5 py-1 rounded-lg tracking-wide transition-all
+           hover:border-accent hover:text-accent active:scale-[0.98] disabled:opacity-40;
   }
   .btn-sm-danger {
-    @apply border border-border text-sm px-3 py-1.5 rounded-lg text-danger transition-all hover:border-danger active:scale-[0.98];
+    @apply border border-border text-sm px-2.5 py-1 rounded-lg text-danger tracking-wide transition-all
+           hover:border-danger active:scale-[0.98];
   }
+  .btn:not(.btn-icon)::before,
+  .btn-sm:not(.btn-icon)::before,
+  .btn-sm-danger:not(.btn-icon)::before {
+    content: "[";
+    @apply opacity-60 mr-0.5;
+  }
+  .btn:not(.btn-icon)::after,
+  .btn-sm:not(.btn-icon)::after,
+  .btn-sm-danger:not(.btn-icon)::after {
+    content: "]";
+    @apply opacity-60 ml-0.5;
+  }
+
   .card {
-    @apply bg-surface border border-border rounded-xl p-5 transition-all;
+    @apply bg-surface border border-border rounded-xl p-4 transition-all;
   }
   .card-hover {
-    @apply hover:border-white/20;
+    @apply hover:border-accent/40;
   }
   .chip {
-    @apply inline-block text-xs px-2 py-0.5 rounded-md border border-border text-muted;
+    @apply inline-block text-xs px-1.5 py-0.5 rounded-lg border border-border text-muted tracking-wide;
   }
+
+  /* `> SECTION` headings, the shell-prompt convention. */
+  .term-h::before {
+    content: "> ";
+    @apply text-accent;
+  }
+  .term-h {
+    @apply uppercase tracking-widest text-sm;
+  }
+
+  /* The dense status line: label/value pairs separated by pipes. */
+  .statstrip {
+    @apply flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tracking-wide border border-border rounded-lg px-3 py-2 bg-surface/60;
+  }
+  .statstrip .sep {
+    @apply text-border select-none;
+  }
+
+  .caret::after {
+    content: "_";
+    @apply text-accent;
+    animation: blink 1.1s step-end infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .caret::after { animation: none; }
+  }
+
   .animate-in {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -71,12 +147,12 @@ body {
   }
   .modal-backdrop {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.72);
     backdrop-filter: blur(2px);
     animation: fadeIn 0.15s ease-out;
   }
   .modal-panel {
-    @apply bg-surface border border-border rounded-2xl p-6 w-full max-w-2xl shadow-2xl;
+    @apply bg-surface border border-border rounded-2xl p-5 w-full max-w-2xl shadow-2xl;
     animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .toast {
@@ -86,4 +162,11 @@ body {
   .toast-success { @apply border-accent; }
   .toast-error { @apply border-danger; }
   .toast-info { @apply border-border; }
+
+  /* Long-form finding text stays readable: monospace is right for chrome, data
+     and evidence, but punishing for paragraphs of prose. */
+  .prose-readable {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    @apply leading-relaxed;
+  }
 }

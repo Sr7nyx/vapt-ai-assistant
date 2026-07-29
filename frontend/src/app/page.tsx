@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList, Panel } from "@/components/Charts";
 import ShaderField from "@/components/ShaderField";
+import { StatStrip, Stat, Sep, SectionHeading } from "@/components/Terminal";
 
 function OverviewHeader() {
   return (
@@ -15,7 +16,8 @@ function OverviewHeader() {
       <ShaderField intensity={0.11} animate={false} seed={8} />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-transparent" />
       <div className="relative z-10">
-        <h1 className="text-2xl font-semibold">Overview</h1>
+        <div className="text-xs text-muted tracking-widest mb-1">VAPT CONSOLE</div>
+        <h1 className="text-2xl tracking-wide caret">OVERVIEW</h1>
         <p className="text-muted text-sm mt-1">Aggregated across all of your projects.</p>
       </div>
     </section>
@@ -52,6 +54,19 @@ export default function Dashboard() {
     <div className="animate-in space-y-10">
       <section>
         <OverviewHeader />
+        <div className="mb-4">
+          <StatStrip>
+            <Stat label="PROJECTS" value={data.projects} />
+            <Sep />
+            <Stat label="FINDINGS" value={data.findings} />
+            <Sep />
+            <Stat label="CRIT/HIGH" value={data.critical + data.high} tone={data.critical + data.high > 0 ? "danger" : undefined} />
+            <Sep />
+            <Stat label="FLAGGED" value={data.qa_flags} tone={data.qa_flags > 0 ? "warn" : undefined} />
+            <Sep />
+            <Stat label="LLM CALLS" value={u.calls} />
+          </StatStrip>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
           <Metric label="Active projects" value={data.projects} />
           <Metric label="Aggregated findings" value={data.findings} />
@@ -61,7 +76,7 @@ export default function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-4">Findings breakdown</h2>
+        <SectionHeading>Findings breakdown</SectionHeading>
         <div className="card mb-4">
           <div className="text-sm font-medium mb-3">Severity distribution</div>
           <SeverityBar rows={data.by_severity} />
@@ -80,7 +95,7 @@ export default function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-1">Risk priorities</h2>
+        <SectionHeading>Risk priorities</SectionHeading>
         <p className="text-muted text-sm mb-4">
           Risk-based prioritization — CVSS blended with EPSS exploit probability, CISA KEV, and environment. Distinct
           from raw severity.
@@ -106,7 +121,7 @@ export default function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-4">Usage</h2>
+        <SectionHeading>Usage</SectionHeading>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 stagger">
           <Metric label="Total LLM calls" value={u.calls} />
           <Metric label="Total tokens" value={u.total_tokens.toLocaleString()} />

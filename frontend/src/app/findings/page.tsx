@@ -92,7 +92,7 @@ export default function FindingsPage() {
 
   return (
     <div className="animate-in">
-      <h1 className="text-2xl font-semibold mb-6">Findings</h1>
+      <h1 className="text-2xl tracking-wide mb-6 caret">FINDINGS</h1>
 
       <label className="grid gap-1.5 mb-4">
         <span className="text-sm text-muted">Project</span>

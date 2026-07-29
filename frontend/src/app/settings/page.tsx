@@ -97,7 +97,7 @@ export default function SettingsPage() {
 
   return (
     <div className="animate-in max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
+      <h1 className="text-2xl tracking-wide mb-6 caret">SETTINGS</h1>
 
       <section className="card grid gap-4 mb-6">
         <div>

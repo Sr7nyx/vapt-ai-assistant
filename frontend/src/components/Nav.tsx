@@ -47,33 +47,39 @@ export default function Nav() {
 
   return (
     <aside className="w-60 shrink-0 bg-surface border-r border-border sticky top-0 h-screen p-4 flex flex-col">
-      <div className="font-semibold text-lg mb-8 px-2 pt-1">
-        vapt<span className="text-accent">.</span>console
+      <div className="text-base mb-8 px-2 pt-1 tracking-wide">
+        <span className="text-accent">&gt;</span> vapt<span className="text-accent">.</span>console
       </div>
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-col gap-0.5">
         {items.map((it) => {
           const active = path === it.href;
           return (
             <Link
               key={it.href}
               href={it.href}
-              className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                active ? "bg-accent/15 text-accent" : "text-muted hover:text-text hover:bg-white/5"
+              className={`group flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm tracking-wide transition-all ${
+                active ? "bg-accent/10 text-accent" : "text-muted hover:text-text hover:bg-white/5"
               }`}
             >
+              {/* The active route is marked with a prompt caret rather than a
+                  filled pill, which is how a shell shows you where you are. */}
+              <span className={`w-2 shrink-0 ${active ? "text-accent" : "text-transparent"}`}>&gt;</span>
               <span className={active ? "text-accent" : "group-hover:text-text transition-colors"}>{it.icon}</span>
-              {it.label}
+              <span className="uppercase text-xs">{it.label}</span>
             </Link>
           );
         })}
       </nav>
       <div className="mt-auto pt-4 border-t border-border/60 text-xs text-muted">
         <div className="truncate mb-2 px-1">{session?.user?.email}</div>
-        <button className="hover:text-danger transition-colors px-1" onClick={() => {
+        <button
+          className="tracking-wide hover:text-danger transition-colors px-1"
+          onClick={() => {
             forgetSession();
             signOut();
-          }}>
-          Sign out
+          }}
+        >
+          [LOG OUT]
         </button>
       </div>
     </aside>

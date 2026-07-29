@@ -56,7 +56,7 @@ export default function SignInGate() {
             <p className="text-muted text-sm mb-6">
               Sign in to create a project and start analyzing. Your projects and findings are private to your account.
             </p>
-            <button className="btn w-full flex items-center justify-center gap-2" onClick={() => signIn("google")}>
+            <button className="btn btn-icon w-full flex items-center justify-center gap-2" onClick={() => signIn("google")}>
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.4-1.6 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.9 3.6 14.76 2.7 12.18 2.7 6.98 2.7 2.7 6.98 2.7 12.18s4.28 9.48 9.48 9.48c5.47 0 9.1-3.85 9.1-9.27 0-.62-.07-1.1-.17-1.29z" />
               </svg>
