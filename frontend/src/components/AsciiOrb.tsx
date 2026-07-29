@@ -4,19 +4,25 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 /**
  * An ASCII orb.
  *
- * The body is a superquadric -- |x|^n + |y|^n + |z|^n = 1 -- raycast per
- * character cell. Animating the exponent morphs it between a sphere (n = 2) and
- * an octahedron (n -> 1), which is where the shape change comes from; there is
- * no second model being cross-faded. Hue cycles slowly, the whole thing drifts
- * vertically, and clicking disturbs only the region around the pointer: a wave
- * travels out from the impact, a word surfaces there, and the surface heals.
+ * The body is a superquadric -- |x|^n + |y|^n + |z|^n = 1 -- and the solid
+ * genuinely tumbles: rather than solving for z at a fixed orientation, each
+ * character cell fires a perspective ray that is inverse-rotated into object
+ * space and marched to the surface. That is what lets the silhouette change as
+ * it turns, which is the difference between a shaded disc and something that
+ * reads as a solid. Animating the exponent morphs it between a sphere (n = 2)
+ * and an octahedron (n -> 1).
+ *
+ * Shading is diffuse plus a specular highlight plus a rim term, all taken from
+ * the true surface normal (the gradient of the implicit function, rotated back
+ * into view space), with distance falloff. Hue cycles, the body drifts, and
+ * clicking disturbs only the region around the pointer.
  *
  * Arithmetic and a <pre>. No image, no 3D library, no dependency.
  */
 
 const COLS = 74;
 const ROWS = 34;
-const FPS = 28;
+const FPS = 45;
 
 const RAMP = " .,:;=+ox*OQ#%@";
 const GLITCH_CHARS = "!<>-_/[]{}=+*^?#%$&@01xX";
@@ -56,7 +62,8 @@ const DEFAULT_WORDS = [
   "TRIAGE", "EXPLOIT", "PAYLOAD", "CONFIRMED", "VERIFIED", "ORACLE", "BOLA",
 ];
 
-const BREAK_MS = 2100;
+const BREAK_MS = 1900;
+const FOCAL = 2.6;   // camera distance; smaller is a wider, more dramatic perspective
 
 function hash2(x: number, y: number): number {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -186,25 +193,33 @@ export default function AsciiOrb({
     const radiusCols = radiusRows / 0.5;   // monospace cells are ~half as wide as tall
     const cx = (COLS - 1) / 2;
     const cy = (ROWS - 1) / 2;
-    const LX = -0.45, LY = -0.62, LZ = 0.64;
+    const LX = -0.42, LY = -0.58, LZ = 0.70;   // fixed light, view space
 
     const draw = (now: number) => {
       const t = reduced ? 2.2 : (now - s.start) / 1000;
 
       // Shape: the exponent breathes between an octahedron and a sphere.
-      const n = 1.08 + (Math.sin(t * 0.38) * 0.5 + 0.5) * 1.05;
-      const invN = 1 / n;
+      const n = 1.08 + (Math.sin(t * 0.5) * 0.5 + 0.5) * 1.05;
+      const nm1 = n - 1;
+      const hue = hueCycle && !reduced ? (baseHue + t * 18) % 360 : baseHue;
 
-      // Colour: a slow hue sweep, or pinned when cycling is off.
-      const hue = hueCycle && !reduced ? (baseHue + t * 13) % 360 : baseHue;
+      // Tumble. R = Rx(ax) . Ry(ay), built once per frame and applied inline.
+      const ay = t * 0.55, ax = t * 0.31;
+      const cA = Math.cos(ay), sA = Math.sin(ay);
+      const cB = Math.cos(ax), sB = Math.sin(ax);
+      const r00 = cA,      r02 = sA;
+      const r10 = sA * sB, r11 = cB,  r12 = -cA * sB;
+      const r20 = -sA * cB, r21 = sB, r22 = cA * cB;
+
+      // The camera sits on +z and is the same for every cell, so rotate it once.
+      const ox = r02 * FOCAL, oy = r12 * FOCAL, oz = r22 * FOCAL;
+      const originSq = ox * ox + oy * oy + oz * oz;
 
       let p = -1;
       if (s.impact >= 0) {
         p = (now - s.impact) / BREAK_MS;
         if (p >= 1) { p = -1; s.impact = -1; s.mask = new Set(); }
       }
-
-      // The disturbance travels outward from the pointer and settles.
       const reach = p < 0 ? 0 : 7 + p * 30;
       const env = p < 0 ? 0 : p < 0.22 ? p / 0.22 : 1 - (p - 0.22) / 0.78;
       const wordAmt =
@@ -215,8 +230,8 @@ export default function AsciiOrb({
         : p < 0.8 ? 1 - (p - 0.68) / 0.12
         : 0;
 
-      const ca = Math.cos(t * 0.42), sa = Math.sin(t * 0.42);
-      const cb = Math.cos(t * 0.19), sb = Math.sin(t * 0.19);
+      const F = (px: number, py: number, pz: number) =>
+        Math.pow(Math.abs(px), n) + Math.pow(Math.abs(py), n) + Math.pow(Math.abs(pz), n);
 
       const out: string[] = [];
       for (let row = 0; row < ROWS; row++) {
@@ -224,57 +239,103 @@ export default function AsciiOrb({
         for (let col = 0; col < COLS; col++) {
           const cell = row * COLS + col;
 
-          // Local disturbance strength for this cell.
           let dis = 0;
           if (p >= 0) {
-            const dx = (col - s.col) * 0.5;       // halve x for the cell aspect
-            const dy = row - s.row;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            dis = Math.max(0, 1 - dist / reach) * env;
+            const ddx = (col - s.col) * 0.5;
+            const ddy = row - s.row;
+            dis = Math.max(0, 1 - Math.sqrt(ddx * ddx + ddy * ddy) / reach) * env;
           }
 
-          let sx = col, sy = row;
+          let scol = col, srow = row;
           if (dis > 0) {
-            const ang = hash2(col, row) * Math.PI * 2;
+            const a = hash2(col, row) * Math.PI * 2;
             const mag = (0.3 + hash2(row, col) * 1.5) * dis * 8;
-            sx = col + Math.cos(ang) * mag;
-            sy = row + Math.sin(ang) * mag * 0.5;
+            scol = col + Math.cos(a) * mag;
+            srow = row + Math.sin(a) * mag * 0.5;
           }
 
-          const x = (sx - cx) / radiusCols;
-          const y = (sy - cy) / radiusRows;
-          const ax = Math.pow(Math.abs(x), n) + Math.pow(Math.abs(y), n);
+          const px0 = (scol - cx) / radiusCols;
+          const py0 = (srow - cy) / radiusRows;
+
+          // Perspective ray, then inverse-rotated into the solid's frame.
+          let dx = px0, dy = py0, dz = -FOCAL;
+          const inv = 1 / Math.hypot(dx, dy, dz);
+          dx *= inv; dy *= inv; dz *= inv;
+          const rdx = r00 * dx + r02 * dz;
+          const rdy = r10 * dx + r11 * dy + r12 * dz;
+          const rdz = r20 * dx + r21 * dy + r22 * dz;
 
           let ch = " ";
-          if (ax <= 1) {
-            const z = Math.pow(1 - ax, invN);
 
-            // Normal is the gradient of the implicit surface, so shading stays
-            // correct as the shape morphs.
-            const gx = Math.pow(Math.abs(x), n - 1) * Math.sign(x);
-            const gy = Math.pow(Math.abs(y), n - 1) * Math.sign(y);
-            const gz = Math.pow(Math.abs(z), n - 1);
-            const len = Math.hypot(gx, gy, gz) || 1;
-            const lum = Math.max(0, (gx / len) * LX + (gy / len) * LY + (gz / len) * LZ);
+          // Bounding-sphere reject: for n >= 1 the solid fits inside r = sqrt(3).
+          const b = ox * rdx + oy * rdy + oz * rdz;
+          const disc = b * b - (originSq - 3);
+          if (disc >= 0) {
+            const sq = Math.sqrt(disc);
+            const tNear = Math.max(0, -b - sq);
+            const tFar = -b + sq;
 
-            const rx = x * ca - z * sa;
-            const rz = x * sa + z * ca;
-            const ry = y * cb - rz * sb;
-            const rz2 = y * sb + rz * cb;
-            const nz = surfaceNoise(rx * 2.4, ry * 2.4, rz2 * 2.4);
+            // Coarse march to straddle the surface, then bisect.
+            let lo = -1, hi = -1;
+            const STEPS = 11, dt = (tFar - tNear) / STEPS;
+            for (let i = 0; i <= STEPS; i++) {
+              const tt = tNear + i * dt;
+              if (F(ox + rdx * tt, oy + rdy * tt, oz + rdz * tt) <= 1) { hi = tt; lo = tt - dt; break; }
+            }
+            if (hi >= 0) {
+              for (let i = 0; i < 5; i++) {
+                const mid = (lo + hi) * 0.5;
+                if (F(ox + rdx * mid, oy + rdy * mid, oz + rdz * mid) <= 1) hi = mid; else lo = mid;
+              }
+              const hx = ox + rdx * hi, hy = oy + rdy * hi, hz = oz + rdz * hi;
 
-            const rim = Math.pow(1 - z, 3) * 0.5;
-            let v = lum * (0.5 + nz * 0.95) + rim;
-            if (wordAmt > 0) v *= 1 - wordAmt * 0.5;      // recede behind the word
-            v = Math.max(0, Math.min(1, v));
-            ch = RAMP[Math.round(v * (RAMP.length - 1))];
-          } else if (ax < 2.4 && hash2(col * 3.1 + Math.floor(t * 2), row * 1.7) > 0.984) {
-            ch = ".";
+              // Normal: gradient of the implicit surface, in object space.
+              const gx = Math.pow(Math.abs(hx), nm1) * Math.sign(hx);
+              const gy = Math.pow(Math.abs(hy), nm1) * Math.sign(hy);
+              const gz = Math.pow(Math.abs(hz), nm1) * Math.sign(hz);
+              const gl = Math.hypot(gx, gy, gz) || 1;
+              const ogx = gx / gl, ogy = gy / gl, ogz = gz / gl;
+
+              // Back into view space with the transpose, so the light stays put
+              // while the solid turns under it.
+              const nvx = cA * ogx + sA * sB * ogy - sA * cB * ogz;
+              const nvy = cB * ogy + sB * ogz;
+              const nvz = sA * ogx - cA * sB * ogy + cA * cB * ogz;
+
+              const diff = Math.max(0, nvx * LX + nvy * LY + nvz * LZ);
+
+              // Specular: half-vector between the light and the view direction.
+              const vx = -dx, vy = -dy, vz = -dz;
+              let hxv = LX + vx, hyv = LY + vy, hzv = LZ + vz;
+              const hl = Math.hypot(hxv, hyv, hzv) || 1;
+              hxv /= hl; hyv /= hl; hzv /= hl;
+              const spec = Math.pow(Math.max(0, nvx * hxv + nvy * hyv + nvz * hzv), 22) * 0.75;
+
+              const facing = Math.abs(nvx * vx + nvy * vy + nvz * vz);
+              const rim = Math.pow(1 - facing, 3) * 0.45;
+
+              // Texture is sampled in object space, so it is painted onto the
+              // solid and tumbles with it rather than sliding across the front.
+              const nz = surfaceNoise(hx * 2.2, hy * 2.2, hz * 2.2);
+
+              // Distance falloff: the far side sits lower on the ramp.
+              const depth = 1 - Math.min(1, Math.max(0, (hi - (FOCAL - 1.4)) / 2.6)) * 0.3;
+
+              let v = (diff * (0.5 + nz * 0.9) + spec + rim) * depth;
+              if (wordAmt > 0) v *= 1 - wordAmt * 0.5;
+              // A touch of stable per-cell dither breaks up the banding between
+              // ramp steps, so the surface shades smoothly instead of stepping.
+              v += (hash2(col, row) - 0.5) * 0.045;
+              v = Math.max(0, Math.min(1, v));
+              ch = RAMP[Math.round(v * (RAMP.length - 1))];
+            }
           }
 
+          if (ch === " " && hash2(col * 3.1 + Math.floor(t * 2), row * 1.7) > 0.988) ch = ".";
+
           if (dis > 0.05 && ch !== " " &&
-              hash2(col + Math.floor(now / 60), row) < dis * 0.5 * (1 - wordAmt * 0.7)) {
-            ch = GLITCH_CHARS[Math.floor(hash2(row, col + Math.floor(now / 60)) * GLITCH_CHARS.length)];
+              hash2(col + Math.floor(now / 55), row) < dis * 0.5 * (1 - wordAmt * 0.7)) {
+            ch = GLITCH_CHARS[Math.floor(hash2(row, col + Math.floor(now / 55)) * GLITCH_CHARS.length)];
           }
 
           if (wordAmt > 0 && s.mask.has(cell)) {
@@ -306,7 +367,7 @@ export default function AsciiOrb({
       }
       if (haloRef.current) {
         haloRef.current.style.background =
-          `radial-gradient(circle, hsl(${hue} 70% 55% / 0.18) 0%, hsl(${hue} 70% 50% / 0.06) 45%, transparent 70%)`;
+          `radial-gradient(circle, hsl(${hue} 70% 55% / 0.2) 0%, hsl(${hue} 70% 50% / 0.07) 45%, transparent 70%)`;
       }
     };
 
