@@ -1,7 +1,7 @@
 "use client";
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
-import ParticleField from "./ParticleField";
+import AsciiOrb from "./AsciiOrb";
 
 const FEATURES = [
   "Extract findings from raw evidence with an AI pipeline that's checked at every step",
@@ -15,7 +15,6 @@ export default function SignInGate() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <ShaderField />
-      <ParticleField />
       <div
         className="pointer-events-none absolute inset-0"
         style={{ background: "radial-gradient(1100px 620px at 50% 38%, transparent, rgba(15,18,22,0.88))" }}
@@ -24,8 +23,8 @@ export default function SignInGate() {
       <div className="relative z-10 min-h-screen w-full flex items-center justify-center p-6">
         <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center">
           <div className="animate-in">
-            <div className="text-2xl font-semibold mb-5">
-              vapt<span className="text-accent">.</span>console
+            <div className="text-2xl mb-5 tracking-wide">
+              <span className="text-accent">&gt;</span> vapt<span className="text-accent">.</span>console
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold leading-tight mb-4">
               AI-assisted vulnerability assessment, <span className="text-accent">with guardrails.</span>
@@ -51,20 +50,33 @@ export default function SignInGate() {
             </p>
           </div>
 
-          <div className="card p-8 shadow-2xl bg-surface/70 backdrop-blur-md animate-in">
-            <h2 className="text-lg font-semibold mb-1">Get started</h2>
-            <p className="text-muted text-sm mb-6">
-              Sign in to create a project and start analyzing. Your projects and findings are private to your account.
-            </p>
-            <button className="btn btn-icon w-full flex items-center justify-center gap-2" onClick={() => signIn("google")}>
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.4-1.6 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.9 3.6 14.76 2.7 12.18 2.7 6.98 2.7 2.7 6.98 2.7 12.18s4.28 9.48 9.48 9.48c5.47 0 9.1-3.85 9.1-9.27 0-.62-.07-1.1-.17-1.29z" />
-              </svg>
-              Sign in with Google
-            </button>
-            <p className="text-xs text-muted mt-4">
-              We only use your Google account to sign you in. Nothing is posted on your behalf.
-            </p>
+          <div className="animate-in">
+            <div className="mb-6">
+              <AsciiOrb />
+              <p className="text-center text-[10px] tracking-widest text-muted/70 mt-2">
+                CLICK TO DISRUPT
+              </p>
+            </div>
+
+            <div className="card p-8 shadow-2xl bg-surface/70 backdrop-blur-md">
+              <h2 className="text-lg tracking-wide mb-1">GET STARTED</h2>
+              <p className="text-muted text-sm mb-6">
+                Sign in to create a project and start analyzing. Your projects and findings are private to your
+                account.
+              </p>
+              <button
+                className="btn btn-icon w-full flex items-center justify-center gap-2"
+                onClick={() => signIn("google")}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.4-1.6 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.9 3.6 14.76 2.7 12.18 2.7 6.98 2.7 2.7 6.98 2.7 12.18s4.28 9.48 9.48 9.48c5.47 0 9.1-3.85 9.1-9.27 0-.62-.07-1.1-.17-1.29z" />
+                </svg>
+                Sign in with Google
+              </button>
+              <p className="text-xs text-muted mt-4">
+                We only use your Google account to sign you in. Nothing is posted on your behalf.
+              </p>
+            </div>
           </div>
         </div>
       </div>
