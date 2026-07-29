@@ -53,6 +53,14 @@ body::after {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
+@keyframes orbFloat {
+  0%, 100% { transform: translateY(-7px); }
+  50% { transform: translateY(7px); }
+}
+@keyframes orbDrift {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); opacity: 0.18; }
+  50% { transform: translateY(-14px) rotate(var(--rot, 0deg)); opacity: 0.4; }
+}
 @keyframes blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
@@ -121,13 +129,33 @@ body::after {
     @apply text-border select-none;
   }
 
+  .orb-float {
+    animation: orbFloat 7.5s ease-in-out infinite;
+  }
+  .orb-drift {
+    animation: orbDrift 13s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .orb-float, .orb-drift { animation: none; }
+  }
+
   .caret::after {
     content: "_";
     @apply text-accent;
     animation: blink 1.1s step-end infinite;
   }
   @media (prefers-reduced-motion: reduce) {
-    .caret::after { animation: none; }
+    .orb-float {
+    animation: orbFloat 7.5s ease-in-out infinite;
+  }
+  .orb-drift {
+    animation: orbDrift 13s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .orb-float, .orb-drift { animation: none; }
+  }
+
+  .caret::after { animation: none; }
   }
 
   .animate-in {

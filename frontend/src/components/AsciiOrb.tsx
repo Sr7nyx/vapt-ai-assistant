@@ -1,30 +1,27 @@
 "use client";
-import { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 
 /**
- * An ASCII orb: a lit, rotating sphere rendered into a character grid, with
- * chromatic-aberration glitch layers. Clicking it shatters the sphere, resolves
- * the debris into a word, then lets it re-form.
+ * An ASCII orb.
  *
- * Rendered by raycasting a unit sphere per character cell and mapping the shaded
- * surface to a density ramp, so there is no image asset and no 3D library: the
- * whole thing is arithmetic and a <pre>.
+ * The body is a superquadric -- |x|^n + |y|^n + |z|^n = 1 -- raycast per
+ * character cell. Animating the exponent morphs it between a sphere (n = 2) and
+ * an octahedron (n -> 1), which is where the shape change comes from; there is
+ * no second model being cross-faded. Hue cycles slowly, the whole thing drifts
+ * vertically, and clicking disturbs only the region around the pointer: a wave
+ * travels out from the impact, a word surfaces there, and the surface heals.
  *
- * The frame is written straight to the DOM nodes through refs rather than React
- * state, because re-rendering a component ~28 times a second to swap one string
- * would cost far more than the drawing does.
+ * Arithmetic and a <pre>. No image, no 3D library, no dependency.
  */
 
-const COLS = 72;
-const ROWS = 32;
+const COLS = 74;
+const ROWS = 34;
 const FPS = 28;
 
-// Low to high density. The ramp is the whole look: too short and the sphere
-// posterizes into bands, too long and it turns to mush.
 const RAMP = " .,:;=+ox*OQ#%@";
 const GLITCH_CHARS = "!<>-_/[]{}=+*^?#%$&@01xX";
 
-// 5x7 glyphs, one row per five characters. Only what a security vocabulary needs.
+// 5x7 glyphs. A security vocabulary needs letters, not digits.
 const FONT: Record<string, string> = {
   A: "01110100011000111111100011000110001",
   B: "11110100011000111110100011000111110",
@@ -59,98 +56,122 @@ const DEFAULT_WORDS = [
   "TRIAGE", "EXPLOIT", "PAYLOAD", "CONFIRMED", "VERIFIED", "ORACLE", "BOLA",
 ];
 
-const BREAK_MS = 1900;
+const BREAK_MS = 2100;
 
-/** Deterministic per-cell noise, so a given cell shatters the same way each time
- *  rather than boiling randomly between frames. */
 function hash2(x: number, y: number): number {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return s - Math.floor(s);
 }
-
 function hash3(x: number, y: number, z: number): number {
   const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
   return s - Math.floor(s);
 }
 
-/** Smooth value noise over the sphere surface, so the skin has structure that
- *  travels with the rotation instead of a flat shaded ball. */
+/** Smooth value noise over the surface, so the skin has structure that travels
+ *  with the rotation rather than reading as a flat shaded solid. */
 function surfaceNoise(x: number, y: number, z: number): number {
-  let sum = 0;
-  let amp = 0.5;
-  let f = 1.6;
+  let sum = 0, amp = 0.5, f = 1.6;
   for (let o = 0; o < 3; o++) {
     const xi = Math.floor(x * f), yi = Math.floor(y * f), zi = Math.floor(z * f);
     const xf = x * f - xi, yf = y * f - yi, zf = z * f - zi;
     const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf), sz = zf * zf * (3 - 2 * zf);
     let acc = 0;
-    for (let dz = 0; dz < 2; dz++) {
-      for (let dy = 0; dy < 2; dy++) {
-        for (let dx = 0; dx < 2; dx++) {
-          const w =
+    for (let dz = 0; dz < 2; dz++)
+      for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++)
+          acc += hash3(xi + dx, yi + dy, zi + dz) *
             (dx ? sx : 1 - sx) * (dy ? sy : 1 - sy) * (dz ? sz : 1 - sz);
-          acc += hash3(xi + dx, yi + dy, zi + dz) * w;
-        }
-      }
-    }
-    sum += acc * amp;
-    amp *= 0.5;
-    f *= 2.1;
+    sum += acc * amp; amp *= 0.5; f *= 2.1;
   }
   return sum;
 }
 
-/** Cells lit by the word's glyphs, centred in the grid. */
-function wordMask(word: string): Set<number> {
+/** Cells lit by a word's glyphs, centred on a point rather than on the grid, so
+ *  the word surfaces where the pointer landed. */
+function wordMask(word: string, atCol: number, atRow: number): Set<number> {
   const on = new Set<number>();
   const letters = word.toUpperCase().split("").filter((c) => FONT[c]);
   if (!letters.length) return on;
 
-  const scale = letters.length > 7 ? 1 : 2;          // long words render smaller
-  const glyphW = 5 * scale + scale;                   // glyph plus one-column gap
+  const scale = letters.length > 6 ? 1 : 2;
+  const glyphW = 5 * scale + scale;
   const totalW = glyphW * letters.length - scale;
-  const startCol = Math.round((COLS - totalW) / 2);
-  const startRow = Math.round((ROWS - 7 * scale) / 2);
+  const startCol = Math.max(1, Math.min(COLS - totalW - 1, Math.round(atCol - totalW / 2)));
+  const startRow = Math.max(1, Math.min(ROWS - 7 * scale - 1, Math.round(atRow - (7 * scale) / 2)));
 
   letters.forEach((ch, i) => {
     const bits = FONT[ch];
-    for (let r = 0; r < 7; r++) {
+    for (let r = 0; r < 7; r++)
       for (let c = 0; c < 5; c++) {
         if (bits[r * 5 + c] !== "1") continue;
-        for (let sr = 0; sr < scale; sr++) {
+        for (let sr = 0; sr < scale; sr++)
           for (let sc = 0; sc < scale; sc++) {
             const col = startCol + i * glyphW + c * scale + sc;
             const row = startRow + r * scale + sr;
             if (col >= 0 && col < COLS && row >= 0 && row < ROWS) on.add(row * COLS + col);
           }
-        }
       }
-    }
   });
   return on;
 }
 
 export default function AsciiOrb({
   words = DEFAULT_WORDS,
+  hueCycle = true,
+  baseHue = 136,
   className = "",
 }: {
   words?: string[];
+  /** Cycle the hue over time. Off pins the orb to baseHue. */
+  hueCycle?: boolean;
+  /** Starting hue; 136 is the phosphor green the rest of the interface uses. */
+  baseHue?: number;
   className?: string;
 }) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
   const baseRef = useRef<HTMLPreElement>(null);
-  const redRef = useRef<HTMLPreElement>(null);
-  const cyanRef = useRef<HTMLPreElement>(null);
-  const state = useRef({ start: 0, breakAt: -1, word: "", wordIdx: 0, mask: new Set<number>() });
+  const aRef = useRef<HTMLPreElement>(null);
+  const bRef = useRef<HTMLPreElement>(null);
+  const haloRef = useRef<HTMLSpanElement>(null);
+  const st = useRef({
+    start: 0,
+    impact: -1,
+    col: COLS / 2,
+    row: ROWS / 2,
+    word: "",
+    idx: 0,
+    mask: new Set<number>(),
+  });
 
-  const shatter = useCallback(() => {
-    const s = state.current;
-    // Ignore clicks while a break is already resolving, so mashing the orb does
-    // not restart the animation mid-word.
-    if (s.breakAt >= 0) return;
-    s.word = words[s.wordIdx % words.length];
-    s.wordIdx += 1;
-    s.mask = wordMask(s.word);
-    s.breakAt = performance.now();
+  // Ambient terms drifting around the body. Deterministic so they do not jump
+  // between renders, and purely decorative.
+  const ambient = useMemo(
+    () =>
+      words.slice(0, 5).map((w, i) => ({
+        word: w,
+        top: `${12 + hash2(i, 3) * 74}%`,
+        left: `${hash2(i, 9) > 0.5 ? 4 + hash2(i, 1) * 22 : 74 + hash2(i, 2) * 20}%`,
+        rot: Math.round((hash2(i, 7) - 0.5) * 130),
+        delay: `${(i * 1.7).toFixed(1)}s`,
+        dur: `${(11 + hash2(i, 5) * 8).toFixed(1)}s`,
+      })),
+    [words]
+  );
+
+  const strike = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const s = st.current;
+    if (s.impact >= 0) return;                    // let the current wave finish
+    const box = baseRef.current?.getBoundingClientRect();
+    if (box && box.width > 0) {
+      s.col = Math.round(((e.clientX - box.left) / box.width) * COLS);
+      s.row = Math.round(((e.clientY - box.top) / box.height) * ROWS);
+    } else {
+      s.col = COLS / 2; s.row = ROWS / 2;
+    }
+    s.word = words[s.idx % words.length];
+    s.idx += 1;
+    s.mask = wordMask(s.word, s.col, s.row);
+    s.impact = performance.now();
   }, [words]);
 
   useEffect(() => {
@@ -158,46 +179,44 @@ export default function AsciiOrb({
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const s = state.current;
+    const s = st.current;
     s.start = performance.now();
 
-    const radiusRows = ROWS * 0.44;
-    const radiusCols = radiusRows / 0.5;   // monospace cells are about half as wide as tall
+    const radiusRows = ROWS * 0.45;
+    const radiusCols = radiusRows / 0.5;   // monospace cells are ~half as wide as tall
     const cx = (COLS - 1) / 2;
     const cy = (ROWS - 1) / 2;
-
-    // Fixed light, so rotation reads as the surface moving under it.
     const LX = -0.45, LY = -0.62, LZ = 0.64;
 
     const draw = (now: number) => {
-      const t = reduced ? 0 : (now - s.start) / 1000;
+      const t = reduced ? 2.2 : (now - s.start) / 1000;
 
-      let p = -1;                                   // break progress, 0..1
-      if (s.breakAt >= 0) {
-        p = (now - s.breakAt) / BREAK_MS;
-        if (p >= 1) { p = -1; s.breakAt = -1; s.mask = new Set(); }
+      // Shape: the exponent breathes between an octahedron and a sphere.
+      const n = 1.08 + (Math.sin(t * 0.38) * 0.5 + 0.5) * 1.05;
+      const invN = 1 / n;
+
+      // Colour: a slow hue sweep, or pinned when cycling is off.
+      const hue = hueCycle && !reduced ? (baseHue + t * 13) % 360 : baseHue;
+
+      let p = -1;
+      if (s.impact >= 0) {
+        p = (now - s.impact) / BREAK_MS;
+        if (p >= 1) { p = -1; s.impact = -1; s.mask = new Set(); }
       }
 
-      // The debris peaks first, then settles back while the word holds, so the
-      // letters are not fighting maximum noise for the reader's attention. It
-      // re-scatters briefly before the sphere re-forms.
-      const shatterAmt =
-        p < 0 ? 0
-        : p < 0.26 ? p / 0.26
-        : p < 0.4 ? 1 - ((p - 0.26) / 0.14) * 0.62
-        : p < 0.68 ? 0.38
-        : p < 0.82 ? 0.38 + ((p - 0.68) / 0.14) * 0.5
-        : 1 - (p - 0.82) / 0.18;
+      // The disturbance travels outward from the pointer and settles.
+      const reach = p < 0 ? 0 : 7 + p * 30;
+      const env = p < 0 ? 0 : p < 0.22 ? p / 0.22 : 1 - (p - 0.22) / 0.78;
       const wordAmt =
         p < 0 ? 0
-        : p < 0.28 ? 0
-        : p < 0.38 ? (p - 0.28) / 0.1
+        : p < 0.2 ? 0
+        : p < 0.32 ? (p - 0.2) / 0.12
         : p < 0.68 ? 1
-        : p < 0.78 ? 1 - (p - 0.68) / 0.1
+        : p < 0.8 ? 1 - (p - 0.68) / 0.12
         : 0;
 
-      const ca = Math.cos(t * 0.45), sa = Math.sin(t * 0.45);
-      const cb = Math.cos(t * 0.21), sb = Math.sin(t * 0.21);
+      const ca = Math.cos(t * 0.42), sa = Math.sin(t * 0.42);
+      const cb = Math.cos(t * 0.19), sb = Math.sin(t * 0.19);
 
       const out: string[] = [];
       for (let row = 0; row < ROWS; row++) {
@@ -205,54 +224,59 @@ export default function AsciiOrb({
         for (let col = 0; col < COLS; col++) {
           const cell = row * COLS + col;
 
-          // Debris displacement: each cell samples the sphere from an offset
-          // position, so the image tears apart rather than simply fading.
+          // Local disturbance strength for this cell.
+          let dis = 0;
+          if (p >= 0) {
+            const dx = (col - s.col) * 0.5;       // halve x for the cell aspect
+            const dy = row - s.row;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            dis = Math.max(0, 1 - dist / reach) * env;
+          }
+
           let sx = col, sy = row;
-          if (shatterAmt > 0) {
+          if (dis > 0) {
             const ang = hash2(col, row) * Math.PI * 2;
-            const mag = (0.4 + hash2(row, col) * 1.6) * shatterAmt * 9;
+            const mag = (0.3 + hash2(row, col) * 1.5) * dis * 8;
             sx = col + Math.cos(ang) * mag;
             sy = row + Math.sin(ang) * mag * 0.5;
           }
 
           const x = (sx - cx) / radiusCols;
           const y = (sy - cy) / radiusRows;
-          const d2 = x * x + y * y;
+          const ax = Math.pow(Math.abs(x), n) + Math.pow(Math.abs(y), n);
 
           let ch = " ";
-          if (d2 <= 1) {
-            const z = Math.sqrt(1 - d2);
-            const lum = Math.max(0, x * LX + y * LY + z * LZ);
+          if (ax <= 1) {
+            const z = Math.pow(1 - ax, invN);
 
-            // Rotate the sample point, not the light, so the texture travels.
+            // Normal is the gradient of the implicit surface, so shading stays
+            // correct as the shape morphs.
+            const gx = Math.pow(Math.abs(x), n - 1) * Math.sign(x);
+            const gy = Math.pow(Math.abs(y), n - 1) * Math.sign(y);
+            const gz = Math.pow(Math.abs(z), n - 1);
+            const len = Math.hypot(gx, gy, gz) || 1;
+            const lum = Math.max(0, (gx / len) * LX + (gy / len) * LY + (gz / len) * LZ);
+
             const rx = x * ca - z * sa;
             const rz = x * sa + z * ca;
             const ry = y * cb - rz * sb;
             const rz2 = y * sb + rz * cb;
+            const nz = surfaceNoise(rx * 2.4, ry * 2.4, rz2 * 2.4);
 
-            const n = surfaceNoise(rx * 2.4, ry * 2.4, rz2 * 2.4);
-            const rim = Math.pow(1 - z, 3) * 0.55;
-            let v = lum * (0.42 + n * 0.95) + rim;
+            const rim = Math.pow(1 - z, 3) * 0.5;
+            let v = lum * (0.5 + nz * 0.95) + rim;
+            if (wordAmt > 0) v *= 1 - wordAmt * 0.5;      // recede behind the word
             v = Math.max(0, Math.min(1, v));
-
-            // Pull the body down the ramp while a word is showing: the sphere
-            // recedes so the letters are the brightest thing on screen.
-            if (wordAmt > 0) v *= 1 - wordAmt * 0.55;
-            const idx = Math.round(v * (RAMP.length - 1));
-            ch = RAMP[idx];
-          } else if (d2 < 2.6 && hash2(col * 3.1 + Math.floor(t * 2), row * 1.7) > 0.982) {
-            // Sparse motes drifting outside the body.
+            ch = RAMP[Math.round(v * (RAMP.length - 1))];
+          } else if (ax < 2.4 && hash2(col * 3.1 + Math.floor(t * 2), row * 1.7) > 0.984) {
             ch = ".";
           }
 
-          // Corruption during the break.
-          if (shatterAmt > 0 && ch !== " ") {
-            if (hash2(col + Math.floor(now / 60), row) < shatterAmt * 0.42 * (1 - wordAmt * 0.7)) {
-              ch = GLITCH_CHARS[Math.floor(hash2(row, col + Math.floor(now / 60)) * GLITCH_CHARS.length)];
-            }
+          if (dis > 0.05 && ch !== " " &&
+              hash2(col + Math.floor(now / 60), row) < dis * 0.5 * (1 - wordAmt * 0.7)) {
+            ch = GLITCH_CHARS[Math.floor(hash2(row, col + Math.floor(now / 60)) * GLITCH_CHARS.length)];
           }
 
-          // The word burns through the debris.
           if (wordAmt > 0 && s.mask.has(cell)) {
             ch = wordAmt > 0.55 ? "#" : hash2(col, row) > 0.5 ? "%" : "*";
           }
@@ -263,29 +287,32 @@ export default function AsciiOrb({
       }
 
       const text = out.join("\n");
-      if (baseRef.current) baseRef.current.textContent = text;
+      const shove = p < 0 ? 0.6 : 0.6 + env * 4.5;
+      const wob = reduced ? 0 : Math.sin(now / 95) * (p < 0 ? 0.3 : 1.5);
 
-      // Chromatic split: the same frame twice more, nudged apart. It widens
-      // during a break, which is what makes the shatter read as damage.
-      const jitter = p < 0 ? 0.6 : 0.6 + shatterAmt * 5;
-      const wobble = reduced ? 0 : Math.sin(now / 90) * (p < 0 ? 0.3 : 1.6);
-      if (redRef.current) {
-        redRef.current.textContent = text;
-        redRef.current.style.transform = `translate(${-jitter - wobble}px, ${wobble * 0.3}px)`;
+      if (baseRef.current) {
+        baseRef.current.textContent = text;
+        baseRef.current.style.color = `hsl(${hue} 70% 62%)`;
       }
-      if (cyanRef.current) {
-        cyanRef.current.textContent = text;
-        cyanRef.current.style.transform = `translate(${jitter + wobble}px, ${-wobble * 0.3}px)`;
+      if (aRef.current) {
+        aRef.current.textContent = text;
+        aRef.current.style.color = `hsl(${(hue + 330) % 360} 80% 55%)`;
+        aRef.current.style.transform = `translate(${-shove - wob}px, ${wob * 0.3}px)`;
+      }
+      if (bRef.current) {
+        bRef.current.textContent = text;
+        bRef.current.style.color = `hsl(${(hue + 30) % 360} 80% 55%)`;
+        bRef.current.style.transform = `translate(${shove + wob}px, ${-wob * 0.3}px)`;
+      }
+      if (haloRef.current) {
+        haloRef.current.style.background =
+          `radial-gradient(circle, hsl(${hue} 70% 55% / 0.18) 0%, hsl(${hue} 70% 50% / 0.06) 45%, transparent 70%)`;
       }
     };
 
-    if (reduced) {
-      draw(performance.now());
-      return;
-    }
+    if (reduced) { draw(performance.now()); return; }
 
-    let raf = 0;
-    let last = 0;
+    let raf = 0, last = 0;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       if (now - last < 1000 / FPS) return;
@@ -294,35 +321,52 @@ export default function AsciiOrb({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [hueCycle, baseHue]);
 
   const layer = "col-start-1 row-start-1 m-0 select-none whitespace-pre leading-none";
-  const size = { fontSize: "clamp(5px, 1.35vw, 9.5px)", lineHeight: "1.02" as const };
+  const size = { fontSize: "clamp(5px, 1.3vw, 9px)", lineHeight: "1.02" as const };
 
   return (
     <button
       type="button"
-      onClick={shatter}
-      aria-label="Decorative animation. Activate to scramble it."
-      title="Click to break it"
-      className={`group relative block w-full cursor-pointer bg-transparent p-0 ${className}`}
+      onClick={strike}
+      aria-label="Decorative animation. Activate to disturb it."
+      title="Click anywhere on it"
+      className={`relative block w-full cursor-crosshair bg-transparent p-0 ${className}`}
     >
-      {/* Glow behind the body. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          width: "68%",
-          aspectRatio: "1",
-          background:
-            "radial-gradient(circle, rgba(var(--phosphor),0.16) 0%, rgba(var(--phosphor),0.06) 45%, transparent 70%)",
-          filter: "blur(14px)",
-        }}
-      />
-      <span className="relative grid justify-items-center">
-        <pre ref={redRef} aria-hidden="true" className={`${layer} text-danger opacity-60`} style={{ ...size, mixBlendMode: "screen" }} />
-        <pre ref={cyanRef} aria-hidden="true" className={`${layer} text-info opacity-60`} style={{ ...size, mixBlendMode: "screen" }} />
-        <pre ref={baseRef} aria-hidden="true" className={`${layer} text-accent`} style={{ ...size, mixBlendMode: "screen" }} />
+      {/* Ambient terms, drifting. Decorative and non-interactive. */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {ambient.map((a, i) => (
+          <span
+            key={i}
+            className="orb-drift absolute text-[9px] tracking-[0.3em] text-accent/25"
+            style={
+              {
+                top: a.top,
+                left: a.left,
+                "--rot": `${a.rot}deg`,
+                animationDelay: a.delay,
+                animationDuration: a.dur,
+              } as React.CSSProperties
+            }
+          >
+            {a.word}
+          </span>
+        ))}
+      </span>
+
+      <span ref={wrapRef} className="orb-float relative block">
+        <span
+          ref={haloRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ width: "70%", aspectRatio: "1", filter: "blur(16px)" }}
+        />
+        <span className="relative grid justify-items-center">
+          <pre ref={aRef} aria-hidden="true" className={`${layer} opacity-55`} style={{ ...size, mixBlendMode: "screen" }} />
+          <pre ref={bRef} aria-hidden="true" className={`${layer} opacity-55`} style={{ ...size, mixBlendMode: "screen" }} />
+          <pre ref={baseRef} aria-hidden="true" className={layer} style={{ ...size, mixBlendMode: "screen" }} />
+        </span>
       </span>
     </button>
   );
