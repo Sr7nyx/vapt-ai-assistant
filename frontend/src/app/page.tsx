@@ -8,6 +8,7 @@ import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList, Panel } from "@/components/Charts";
 import ShaderField from "@/components/ShaderField";
 import { StatStrip, Stat, Sep, SectionHeading } from "@/components/Terminal";
+import { UsageSummary } from "@/lib/types";
 
 function OverviewHeader() {
   return (
@@ -33,6 +34,23 @@ export default function Dashboard() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Usage is fetched separately from /overview so the window can change without
+  // re-aggregating the entire dashboard.
+  const [usageWindow, setUsageWindow] = useState("all");
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    api
+      .usage(token, usageWindow)
+      .then((r) => alive && setUsage(r))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [token, usageWindow]);
+
   useEffect(() => {
     if (!token) return;
     setLoading(true);
@@ -48,7 +66,7 @@ export default function Dashboard() {
     );
   }
 
-  const u = data.usage;
+  const u = usage ?? data.usage;
 
   return (
     <div className="animate-in space-y-10">
@@ -121,7 +139,27 @@ export default function Dashboard() {
       </section>
 
       <section>
-        <SectionHeading>Usage</SectionHeading>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h2 className="term-h text-muted">Usage</h2>
+          <div className="flex items-center gap-1">
+            {([["1h", "1H"], ["24h", "24H"], ["7d", "7D"], ["30d", "30D"], ["all", "ALL"]] as const).map(
+              ([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setUsageWindow(key)}
+                  aria-pressed={usageWindow === key}
+                  className={`rounded-lg border px-2 py-1 text-[11px] tracking-widest transition-all ${
+                    usageWindow === key
+                      ? "border-accent/70 text-accent"
+                      : "border-border text-muted hover:border-accent/50 hover:text-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            )}
+          </div>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 stagger">
           <Metric label="Total LLM calls" value={u.calls} />
           <Metric label="Total tokens" value={u.total_tokens.toLocaleString()} />

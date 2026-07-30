@@ -498,23 +498,34 @@ def record_usage_batch(user_id, records):
                 )
 
 
-def get_usage_summary(user_id):
+def get_usage_summary(user_id, hours=None):
+    """LLM usage for a user, optionally limited to a rolling window in hours.
+
+    hours=None means all time. The window is applied in SQL rather than by
+    filtering in Python so the aggregate stays a single indexed scan.
+    """
+    window = ""
+    params = [user_id]
+    if hours:
+        window = " AND created_at > now() - make_interval(hours => %s)"
+        params.append(int(hours))
+
     row = _one(
-        """
+        f"""
         SELECT COUNT(*) AS calls,
                COALESCE(SUM(prompt_tokens),0) AS prompt_tokens,
                COALESCE(SUM(completion_tokens),0) AS completion_tokens,
                COALESCE(SUM(total_tokens),0) AS total_tokens
-        FROM llm_usage WHERE user_id = %s
+        FROM llm_usage WHERE user_id = %s{window}
         """,
-        (user_id,),
+        tuple(params),
     ) or {}
     by_model = _all(
-        """
+        f"""
         SELECT model, COUNT(*) AS calls, COALESCE(SUM(total_tokens),0) AS total_tokens
-        FROM llm_usage WHERE user_id = %s GROUP BY model ORDER BY total_tokens DESC
+        FROM llm_usage WHERE user_id = %s{window} GROUP BY model ORDER BY total_tokens DESC
         """,
-        (user_id,),
+        tuple(params),
     )
     return {
         "calls": (row.get("calls") or 0),

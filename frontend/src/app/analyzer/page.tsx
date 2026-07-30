@@ -11,6 +11,8 @@ import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
+import { useSelection } from "@/hooks/useSelection";
+import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
 import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
@@ -129,19 +131,39 @@ export default function AnalyzerPage() {
     }
   };
 
-  const commit = async () => {
+  // Extracted results have no server id yet, so position is the key. The hook
+  // prunes on list change, so a fresh analysis clears the previous selection
+  // rather than carrying indexes over to different findings.
+  const sel = useSelection(
+    results.map((f, i) => ({ f, i })),
+    (r) => r.i
+  );
+
+  const commit = async (subset?: Record<string, unknown>[]) => {
     if (!projectId) {
       notify("Select a project first.", "error");
       return;
     }
+    const batch = subset && subset.length ? subset : results;
     setCommitting(true);
     try {
       let n = 0;
-      for (const f of results) {
-        await api.createFinding(token, projectId, applyDefaults(f));
-        n++;
+      const failed: string[] = [];
+      for (const f of batch) {
+        try {
+          await api.createFinding(token, projectId, applyDefaults(f));
+          n++;
+        } catch (e) {
+          // One bad finding should not strand the rest of the batch.
+          failed.push(String(f.title || "untitled"));
+        }
       }
-      notify(`Committed ${n} finding(s) to the project`, "success");
+      if (failed.length) {
+        notify(`Committed ${n}; ${failed.length} failed (${failed[0]}${failed.length > 1 ? ", …" : ""})`, "error");
+      } else {
+        notify(`Committed ${n} finding(s) to the project`, "success");
+      }
+      sel.clear();
     } catch (e) {
       notify((e as Error).message, "error");
     } finally {
@@ -272,16 +294,39 @@ export default function AnalyzerPage() {
 
       {results.length > 0 && (
         <div className="grid gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">{results.length} finding(s)</h2>
-            <button className="btn-sm" onClick={commit} disabled={committing}>
-              {committing ? "Committing…" : "Commit to project"}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-4">
+              <MasterCheckbox
+                allSelected={sel.allSelected}
+                someSelected={sel.someSelected}
+                onToggle={sel.toggleAll}
+                label="SELECT ALL"
+              />
+              <h2 className="term-h text-muted">{results.length} finding(s)</h2>
+            </div>
+            <button className="btn-sm" onClick={() => commit()} disabled={committing}>
+              {committing ? "Committing…" : "Commit all"}
             </button>
           </div>
+
+          <SelectionBar count={sel.count} noun="finding" onClear={sel.clear}>
+            <button
+              className="btn-sm"
+              onClick={() => commit(sel.selectedItems.map((r) => r.f))}
+              disabled={committing}
+            >
+              {committing ? "Committing…" : `Commit ${sel.count} selected`}
+            </button>
+          </SelectionBar>
           {results.map((f, i) => (
             <div key={i} className="card card-hover grid gap-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <RowCheckbox
+                  checked={sel.isSelected(i)}
+                  onToggle={() => sel.toggle(i)}
+                  label={`Select ${String(f.title || "finding")}`}
+                />
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
                     <span className="font-medium">{f.title as string}</span>

@@ -105,3 +105,12 @@ export interface FindingEvent {
   rationale: string;
   created_at: string;
 }
+
+export interface UsageSummary {
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  by_model: { model: string; calls: number; total_tokens: number }[];
+  window?: string;
+}

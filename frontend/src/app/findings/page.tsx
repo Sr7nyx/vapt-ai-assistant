@@ -12,6 +12,8 @@ import RetestModal from "@/components/RetestModal";
 import MultiSelect from "@/components/MultiSelect";
 import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
 import AuditTrail from "@/components/AuditTrail";
+import { useSelection } from "@/hooks/useSelection";
+import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
 
 const SEV_ORDER = ["Critical", "High", "Medium", "Low", "Informational"];
 
@@ -28,6 +30,7 @@ export default function FindingsPage() {
   // Tracked separately from row expansion so opening a finding to read it does not
   // fire a history request every time.
   const [historyFor, setHistoryFor] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
   const [retesting, setRetesting] = useState<Finding | null>(null);
   const [sevF, setSevF] = useState<string[]>([]);
@@ -94,6 +97,28 @@ export default function FindingsPage() {
       (catF.length === 0 || catF.includes((f.category as string) || ""))
   );
 
+  // Selection is over the *filtered* rows, and the hook prunes keys that leave
+  // the list, so changing a filter cannot leave a bulk action holding ids the
+  // user can no longer see.
+  const sel = useSelection(shown, (f) => f.id);
+
+  const deleteSelected = async () => {
+    const ids = sel.selectedItems.map((f) => f.id);
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} finding(s)? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      const r = await api.bulkDeleteFindings(token, ids);
+      notify(`Deleted ${r.deleted} finding(s)`, "success");
+      sel.clear();
+      load();
+    } catch (e) {
+      notify((e as Error).message, "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div className="animate-in">
       <h1 className="text-2xl tracking-wide mb-6 caret">FINDINGS</h1>
@@ -139,7 +164,23 @@ export default function FindingsPage() {
             </div>
           </div>
 
-          <div className="text-sm text-muted mb-3">Showing {shown.length} of {findings.length} finding(s).</div>
+          <div className="flex items-center gap-4 mb-3">
+            <MasterCheckbox
+              allSelected={sel.allSelected}
+              someSelected={sel.someSelected}
+              onToggle={sel.toggleAll}
+              label="SELECT ALL"
+            />
+            <span className="text-sm text-muted">
+              Showing {shown.length} of {findings.length} finding(s).
+            </span>
+          </div>
+
+          <SelectionBar count={sel.count} noun="finding" onClear={sel.clear}>
+            <button className="btn-sm-danger" onClick={deleteSelected} disabled={bulkBusy}>
+              {bulkBusy ? "Deleting…" : "Delete selected"}
+            </button>
+          </SelectionBar>
 
           {loading ? (
             <Skeleton rows={6} />
@@ -153,8 +194,19 @@ export default function FindingsPage() {
                 const asset = (f.affected_url as string) || (f.affected_host as string) || "";
                 return (
                   <div key={f.id} className="card p-0 overflow-hidden">
+                    {/* The checkbox sits outside the expand button: nesting an
+                        input inside a button makes the row un-selectable without
+                        also opening it. */}
+                    <div className="flex items-stretch">
+                    <span className="flex items-start pl-4 pt-4">
+                      <RowCheckbox
+                        checked={sel.isSelected(f.id)}
+                        onToggle={() => sel.toggle(f.id)}
+                        label={`Select ${f.title}`}
+                      />
+                    </span>
                     <button
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                      className="flex-1 min-w-0 flex items-center gap-3 px-3 py-3 text-left hover:bg-white/5 transition-colors"
                       onClick={() => toggle(f.id)}
                     >
                       <svg
@@ -174,6 +226,7 @@ export default function FindingsPage() {
                         <ReviewFlag review={f._review} />
                       </span>
                     </button>
+                    </div>
 
                     {open && (
                       <div className="px-4 pb-4 pt-1 border-t border-border/60 grid gap-3">

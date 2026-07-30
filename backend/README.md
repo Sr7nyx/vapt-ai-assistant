@@ -149,7 +149,7 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | --- | --- | --- |
 | GET | `/health` | Liveness |
 | GET | `/me` | Current user (id, email) |
-| GET | `/usage` | LLM usage summary for the user |
+| GET | `/usage?window=` | LLM usage summary; window is `1h`, `24h`, `7d`, `30d`, or `all` |
 | GET | `/overview` | Aggregate dashboard across all projects |
 | GET | `/demo/quota` | Remaining shared-key runs for this user |
 | GET/POST | `/projects` | List / create projects |
@@ -157,13 +157,14 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | GET/POST | `/projects/{id}/findings` | List (with risk, mapping, verdict) / create |
 | POST | `/projects/{id}/findings/commit` | Bulk-commit scanner candidates (asset-aware dedup) |
 | PATCH/DELETE | `/findings/{id}` | Update / delete a finding |
+| POST | `/findings/bulk-delete` | Delete several findings (audited individually) |
 | POST | `/findings/{id}/retest` | Record a retest outcome |
 | GET | `/findings/{id}/events` | Audit trail for one finding |
 | POST | `/analyze` | Start an analysis job -> `{job_id}` |
 | POST | `/scan/parse` | Upload scanner files -> normalized candidates |
 | POST | `/scan/triage` | Start an AI-triage job -> `{job_id}` |
 | GET | `/jobs/{id}` | Poll a background job (owner-scoped) |
-| POST | `/projects/{id}/report` | Export a report (docx / pdf / xlsx / json) |
+| POST | `/projects/{id}/report` | Export a report (docx / pdf / xlsx / json); optional `finding_ids` narrows the scope |
 | GET | `/llm/providers` | Allowlisted provider hosts |
 | POST | `/llm/models` | List a provider's models |
 | POST | `/llm/lanes` | Resolved provider + model per lane (no keys returned) |

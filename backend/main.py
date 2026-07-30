@@ -121,6 +121,7 @@ class ReportIn(BaseModel):
     fmt: str = "docx"
     exec_summary: str = ""
     methodology: str = ""
+    finding_ids: Optional[List[int]] = None
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -234,9 +235,22 @@ def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email}
 
 
+# Windows the UI offers, mapped to hours. Bounded on purpose: an arbitrary
+# caller-supplied interval is a needless surface on an aggregate query.
+USAGE_WINDOWS = {"1h": 1, "24h": 24, "7d": 168, "30d": 720, "all": 0}
+
+
 @app.get("/usage")
-def usage(user: User = Depends(get_current_user)):
-    return store.get_usage_summary(user.id)
+def usage(window: str = "all", user: User = Depends(get_current_user)):
+    hours = USAGE_WINDOWS.get((window or "all").lower())
+    if hours is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"window must be one of: {', '.join(USAGE_WINDOWS)}",
+        )
+    out = store.get_usage_summary(user.id, hours or None)
+    out["window"] = (window or "all").lower()
+    return out
 
 
 @app.get("/demo/quota")
@@ -551,6 +565,27 @@ def delete_finding(finding_id: int, user: User = Depends(get_current_user)):
     return {"ok": True}
 
 
+class BulkIdsIn(BaseModel):
+    ids: List[int]
+
+
+@app.post("/findings/bulk-delete")
+def bulk_delete_findings(body: BulkIdsIn, user: User = Depends(get_current_user)):
+    """Delete several findings in one call.
+
+    Each deletion goes through the same owner-scoped, audited path as the single
+    delete, so ids belonging to another account are simply not found rather than
+    being refused loudly -- there is no oracle here for probing which ids exist.
+    """
+    deleted, missing = 0, 0
+    for fid in body.ids[:500]:
+        if store.delete_finding(user.id, int(fid), actor=_actor(user)):
+            deleted += 1
+        else:
+            missing += 1
+    return {"deleted": deleted, "missing": missing}
+
+
 @app.post("/findings/{finding_id}/retest")
 def retest_finding(finding_id: int, body: RetestIn, user: User = Depends(get_current_user)):
     ok = store.set_retest_result(
@@ -706,6 +741,15 @@ def job_status(job_id: str, user: User = Depends(get_current_user)):
 def export_report(project_id: int, body: ReportIn, user: User = Depends(get_current_user)):
     project = _require_project(user, project_id)
     findings = store.get_findings_by_project(user.id, project_id)
+
+    # An explicit subset lets a report cover, say, only confirmed high-severity
+    # findings. Ids are intersected with what the project already returned, so a
+    # caller cannot pull another project's findings into their report.
+    if body.finding_ids:
+        wanted = {int(i) for i in body.finding_ids}
+        findings = [f for f in findings if int(f.get("id", 0)) in wanted]
+        if not findings:
+            raise HTTPException(status_code=400, detail="No findings matched the selection.")
 
     fmt = (body.fmt or "docx").lower()
     tmp_dir = tempfile.mkdtemp()

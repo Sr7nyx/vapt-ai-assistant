@@ -1,4 +1,4 @@
-import { Project, Finding, Job, Overview, LaneInfo, FindingEvent } from "./types";
+import { Project, Finding, Job, Overview, LaneInfo, FindingEvent, UsageSummary } from "./types";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
@@ -48,7 +48,8 @@ async function req<T>(token: string | undefined, method: string, path: string, b
 
 export const api = {
   me: (t: string | undefined) => req<{ id: string; email: string }>(t, "GET", "/me"),
-  usage: (t: string | undefined) => req<Record<string, number>>(t, "GET", "/usage"),
+  usage: (t: string | undefined, window = "all") =>
+    req<UsageSummary>(t, "GET", `/usage?window=${encodeURIComponent(window)}`),
   overview: (t: string | undefined) => req<Overview>(t, "GET", "/overview"),
   demoQuota: (t: string | undefined) =>
     req<{ limit: number; used: number; remaining: number; window_hours: number }>(t, "GET", "/demo/quota"),
@@ -75,6 +76,8 @@ export const api = {
     req<{ committed: number; skipped: number }>(t, "POST", `/projects/${pid}/findings/commit`, { candidates }),
   updateFinding: (t: string | undefined, id: number, data: unknown) => req<unknown>(t, "PATCH", `/findings/${id}`, { data }),
   deleteFinding: (t: string | undefined, id: number) => req<unknown>(t, "DELETE", `/findings/${id}`),
+  bulkDeleteFindings: (t: string | undefined, ids: number[]) =>
+    req<{ deleted: number; missing: number }>(t, "POST", "/findings/bulk-delete", { ids }),
   findingEvents: (t: string | undefined, id: number) =>
     req<FindingEvent[]>(t, "GET", `/findings/${id}/events`),
   retestFinding: (t: string | undefined, id: number, body: unknown) => req<unknown>(t, "POST", `/findings/${id}/retest`, body),
@@ -95,7 +98,7 @@ export const api = {
     return res.json();
   },
 
-  exportReport: async (t: string | undefined, pid: number, body: { fmt: string; exec_summary: string; methodology: string }) => {
+  exportReport: async (t: string | undefined, pid: number, body: { fmt: string; exec_summary: string; methodology: string; finding_ids?: number[] }) => {
     const res = await fetch(`${BASE}/projects/${pid}/report`, {
       method: "POST",
       headers: jsonHeaders(t),
