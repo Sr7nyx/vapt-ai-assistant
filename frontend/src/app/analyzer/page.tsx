@@ -56,6 +56,10 @@ export default function AnalyzerPage() {
   const [committing, setCommitting] = useState(false);
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
   const [quotaTick, setQuotaTick] = useState(0);
+  // Result of the free server-side pre-check. Held as a hint only; the authoritative
+  // refusal comes from /analyze, so the two can never disagree in a way that lets
+  // junk through.
+  const [guard, setGuard] = useState<{ ok: boolean; reason: string } | null>(null);
   const handled = useRef<string | null>(null);
   const job = useJob(token, jobId);
 
@@ -113,6 +117,27 @@ export default function AnalyzerPage() {
   const combinedInput = () =>
     [input, ...attachments.filter((a) => !a.skipped).map((a) => `\n\n--- ${a.name} ---\n${a.content}`)].join("").trim();
 
+  // Debounced so typing does not fire a request per keystroke. The endpoint is
+  // pure pattern matching, so this costs no quota.
+  useEffect(() => {
+    const raw = [input, ...attachments.filter((a) => !a.skipped).map((a) => a.content)].join("\n").trim();
+    if (!token || raw.length === 0) {
+      setGuard(null);
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      api
+        .precheck(token, raw)
+        .then((r) => alive && setGuard({ ok: r.ok, reason: r.reason }))
+        .catch(() => alive && setGuard(null));
+    }, 700);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [token, input, attachments]);
+
   const run = async () => {
     const raw = combinedInput();
     if (!raw) {
@@ -126,8 +151,11 @@ export default function AnalyzerPage() {
       setActiveJob("analyze", job_id);
       setJobId(job_id);
     } catch (e) {
+      const err = e as { status?: number; detail?: { error?: string } };
       if (isDemoLimit(e)) setLimitMsg((e as Error).message);
-      else notify((e as Error).message, "error");
+      else if (err.status === 422 && err.detail?.error === "not_security_evidence") {
+        setGuard({ ok: false, reason: (e as Error).message });
+      } else notify((e as Error).message, "error");
     }
   };
 
@@ -267,6 +295,11 @@ export default function AnalyzerPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
+          {guard && !guard.ok && (
+            <p className="text-xs text-warn mt-2 border border-warn/40 rounded-lg px-3 py-2">
+              {guard.reason}
+            </p>
+          )}
           <div className="flex justify-between text-xs text-muted mt-1">
             <span>{input.length.toLocaleString()} chars typed</span>
             {input && (
@@ -278,7 +311,7 @@ export default function AnalyzerPage() {
         </Field>
 
         <div>
-          <button className="btn" onClick={run} disabled={running}>
+          <button className="btn" onClick={run} disabled={running || (guard ? !guard.ok : false)}>
             {running ? (
               <span className="flex items-center gap-2">
                 <Spinner /> Analyzing

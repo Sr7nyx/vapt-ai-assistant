@@ -30,6 +30,7 @@ caps at 10-60s, no background workers).
 | `llm_config.py` | Provider allowlist and SSRF validation for user-supplied endpoints |
 | `verdict_engine.py` | Deterministic status + confidence from the reviewer's signals |
 | `qa_utils.py` | Parses reviewer remarks and QA signals into structured fields |
+| `input_guard.py` | Pre-flight check that turns away input which is not security evidence |
 | `scan_import.py` | Burp / ZAP / Nessus / Nmap / CSV parsers to normalized candidates |
 | `risk_map.py` | CVSS computation, risk priority, OWASP/PCI/CWE/ATT&CK mapping |
 | `cve_enrich.py` | EPSS / CISA KEV / NVD enrichment |
@@ -56,6 +57,26 @@ reach a report:
 The `eval/` directory (repo root) scores this engine on a labelled set:
 precision, recall, false-positive reduction, and evidence-grounding accuracy,
 each with a 95% Wilson interval.
+
+## Turning away non-evidence
+
+Every analysis costs at least two model calls, so `input_guard.py` checks the
+submission first and refuses with 422 **before** the demo quota is touched -- a
+rejected input costs nothing at all.
+
+The check looks for security-relevant *structure*: protocol shapes, network
+identifiers, scanner output, code, configuration, stack traces, payload markers,
+and the vocabulary of the field. It deliberately does **not** look for profanity or
+"inappropriate" content. Real evidence is full of hostile strings -- an XSS proof of
+concept is a rude payload, and log excerpts carry whatever users typed -- so
+filtering on tone would reject exactly the material this tool exists to analyse.
+`<script>alert('fuck you')</script>` is accepted; `Fuck you` on its own is not.
+
+The gate is intentionally narrow, because a wrongly rejected analysis costs the
+user real work while a wrongly accepted one costs a few thousand tokens. It
+refuses only text that is short with no signal at all, or long and plainly prose.
+`POST /llm/precheck` runs the same check for free so the interface can warn before
+the button is pressed rather than after.
 
 ## Audit trail
 
@@ -160,7 +181,8 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | POST | `/findings/bulk-delete` | Delete several findings (audited individually) |
 | POST | `/findings/{id}/retest` | Record a retest outcome |
 | GET | `/findings/{id}/events` | Audit trail for one finding |
-| POST | `/analyze` | Start an analysis job -> `{job_id}` |
+| POST | `/analyze` | Start an analysis job -> `{job_id}`; refuses non-evidence with 422 |
+| POST | `/llm/precheck` | Whether input would be accepted, without running anything |
 | POST | `/scan/parse` | Upload scanner files -> normalized candidates |
 | POST | `/scan/triage` | Start an AI-triage job -> `{job_id}` |
 | GET | `/jobs/{id}` | Poll a background job (owner-scoped) |

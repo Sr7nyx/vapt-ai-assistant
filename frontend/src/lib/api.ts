@@ -55,6 +55,10 @@ export const api = {
     req<{ limit: number; used: number; remaining: number; window_hours: number }>(t, "GET", "/demo/quota"),
 
   llmProviders: (t: string | undefined) => req<{ allowed_hosts: string[] }>(t, "GET", "/llm/providers"),
+  precheck: (t: string | undefined, raw_input: string) =>
+    req<{ ok: boolean; reason: string; signals: string[]; score: number; chars: number }>(
+      t, "POST", "/llm/precheck", { raw_input }
+    ),
   llmLanes: (t: string | undefined, body: { lane_config?: unknown }) =>
     req<{ lanes: Record<string, LaneInfo> }>(t, "POST", "/llm/lanes", body),
   llmModels: (t: string | undefined, body: { base_url: string; api_key: string }) =>

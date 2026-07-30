@@ -40,6 +40,7 @@ import scan_import
 import risk_map
 import qa_utils
 import verdict_engine
+import input_guard
 import exporter
 from collections import Counter
 import pg_store as store
@@ -651,6 +652,16 @@ def analyze(body: AnalyzeIn, user: User = Depends(get_current_user)):
     if not key:
         raise HTTPException(status_code=400, detail="No LLM API key configured")
     lanes = _lanes(body.lane_config)
+
+    # Checked before the quota is touched, so turning input away costs the user
+    # nothing: no model calls, and no demo run consumed.
+    verdict = input_guard.assess_input(body.raw_input)
+    if not verdict["ok"]:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "not_security_evidence", "message": verdict["reason"], "chars": verdict["chars"]},
+        )
+
     _enforce_demo_limit(user.id, "analyze", body.api_key, lanes)
     jid = _new_job(user.id)
     threading.Thread(
@@ -662,6 +673,20 @@ def analyze(body: AnalyzeIn, user: User = Depends(get_current_user)):
 
 
 # --- Scanner import ----------------------------------------------------------
+class GuardIn(BaseModel):
+    raw_input: str = ""
+
+
+@app.post("/llm/precheck")
+def precheck(body: GuardIn, user: User = Depends(get_current_user)):
+    """Whether input would be accepted for analysis, without running any.
+
+    Free to call: it is pure pattern matching, so the interface can warn before a
+    user presses the button rather than after.
+    """
+    return input_guard.assess_input(body.raw_input)
+
+
 @app.post("/scan/parse")
 async def scan_parse(files: List[UploadFile] = File(...), user: User = Depends(get_current_user)):
     all_candidates: List[dict] = []
