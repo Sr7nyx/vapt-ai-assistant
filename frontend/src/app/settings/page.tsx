@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { getLlmConfig, setLlmConfig, clearLlmConfig, getRemember, forgetSession, LlmConfig, EMPTY_CONFIG } from "@/lib/prefs";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
+import { GithubButton, SourceFooter, GithubMark, REPO_URL } from "@/components/SourceLinks";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
@@ -101,7 +102,7 @@ export default function SettingsPage() {
 
       <section className="card grid gap-4 mb-6">
         <div>
-          <h2 className="font-semibold">Model configuration</h2>
+          <h2 className="term-h text-muted">Model configuration</h2>
           <p className="text-muted text-sm mt-1">
             The pipeline uses two model lanes. Leave anything blank to fall back to the server configuration.
           </p>
@@ -230,7 +231,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card grid gap-2">
-        <h2 className="font-semibold">Account</h2>
+        <h2 className="term-h text-muted">Account</h2>
         <div className="text-sm text-muted">Signed in as {session?.user?.email}</div>
         <button
           className="btn-sm w-fit"
@@ -258,6 +259,42 @@ export default function SettingsPage() {
           </button>
         </div>
         <p className="text-xs text-muted mt-2">API: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}</p>
+      </section>
+
+      <section className="card grid gap-3">
+        <h2 className="term-h text-muted">About</h2>
+        <p className="text-sm text-muted">
+          An AI-assisted workspace for penetration testing, built so the model is assumed wrong until proven
+          otherwise: CVSS is computed deterministically, every finding is checked against its evidence, and a
+          second reviewer argues the false-positive case before anything reaches a report.
+        </p>
+
+        <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+          <div className="flex justify-between border-b border-border/50 pb-1">
+            <dt className="text-muted">License</dt>
+            <dd>MIT</dd>
+          </div>
+          <div className="flex justify-between border-b border-border/50 pb-1">
+            <dt className="text-muted">Repository</dt>
+            <dd className="truncate">
+              <a
+                href={REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 hover:text-accent transition-colors"
+              >
+                <GithubMark size={12} />
+                Sr7nyx/vapt-ai-assistant
+              </a>
+            </dd>
+          </div>
+        </dl>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <GithubButton tone="accent" label="VIEW SOURCE" />
+        </div>
+
+        <SourceFooter className="pt-2 border-t border-border/50 mt-1" />
       </section>
     </div>
   );

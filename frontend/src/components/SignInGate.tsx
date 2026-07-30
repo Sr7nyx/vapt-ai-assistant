@@ -2,6 +2,7 @@
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
 import AsciiOrb from "./AsciiOrb";
+import { GithubButton, SourceFooter } from "./SourceLinks";
 
 const FEATURES = [
   "Extract findings from raw evidence with an AI pipeline that's checked at every step",
@@ -48,6 +49,7 @@ export default function SignInGate() {
             <p className="text-xs text-muted">
               For authorized security testing only. This is a demo — use synthetic data, not real client data.
             </p>
+            <SourceFooter className="mt-5" />
           </div>
 
           <div className="animate-in">
@@ -76,6 +78,16 @@ export default function SignInGate() {
               <p className="text-xs text-muted mt-4">
                 We only use your Google account to sign you in. Nothing is posted on your behalf.
               </p>
+
+              {/* The repository is the point of the project for anyone who is not
+                  going to sign in, so it gets a real button rather than a
+                  footnote -- secondary to the primary action, but not buried. */}
+              <div className="mt-5 pt-5 border-t border-border/60">
+                <GithubButton full label="VIEW SOURCE ON GITHUB" />
+                <p className="text-[11px] text-muted mt-2.5 text-center">
+                  Open source under MIT. Read the code without signing in.
+                </p>
+              </div>
             </div>
           </div>
         </div>
