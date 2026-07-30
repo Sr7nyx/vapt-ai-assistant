@@ -83,7 +83,7 @@ export default function SignInGate() {
                   going to sign in, so it gets a real button rather than a
                   footnote -- secondary to the primary action, but not buried. */}
               <div className="mt-5 pt-5 border-t border-border/60">
-                <GithubButton full label="VIEW SOURCE ON GITHUB" />
+                <GithubButton full label="GITHUB" />
                 <p className="text-[11px] text-muted mt-2.5 text-center">
                   Open source under MIT. Read the code without signing in.
                 </p>
