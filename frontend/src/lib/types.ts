@@ -94,3 +94,14 @@ export interface VerdictResolution {
   signals: Record<string, unknown>;
   auto_set: boolean;
 }
+
+export interface FindingEvent {
+  id: number;
+  actor: string;
+  action: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  rationale: string;
+  created_at: string;
+}

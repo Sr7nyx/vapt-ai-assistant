@@ -1,4 +1,4 @@
-import { Project, Finding, Job, Overview, LaneInfo } from "./types";
+import { Project, Finding, Job, Overview, LaneInfo, FindingEvent } from "./types";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
@@ -75,6 +75,8 @@ export const api = {
     req<{ committed: number; skipped: number }>(t, "POST", `/projects/${pid}/findings/commit`, { candidates }),
   updateFinding: (t: string | undefined, id: number, data: unknown) => req<unknown>(t, "PATCH", `/findings/${id}`, { data }),
   deleteFinding: (t: string | undefined, id: number) => req<unknown>(t, "DELETE", `/findings/${id}`),
+  findingEvents: (t: string | undefined, id: number) =>
+    req<FindingEvent[]>(t, "GET", `/findings/${id}/events`),
   retestFinding: (t: string | undefined, id: number, body: unknown) => req<unknown>(t, "POST", `/findings/${id}/retest`, body),
 
   analyze: (t: string | undefined, body: unknown) => req<{ job_id: string }>(t, "POST", "/analyze", body),

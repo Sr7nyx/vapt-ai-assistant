@@ -442,6 +442,37 @@ def delete_project(project_id: int, user: User = Depends(get_current_user)):
     return {"ok": True}
 
 
+def _actor(user: User) -> str:
+    """Who performed an action, for the audit trail. Email is more legible than a
+    Google subject id, but the id is the stable identity, so fall back to it."""
+    return f"user:{user.email or user.id}"
+
+
+# Display-only annotations that must never be written to a finding's columns.
+_ANNOTATION_KEYS = ("_verdict", "_review", "_assessment", "_risk", "_uid", "noise",
+                    "source", "scanner_confidence")
+
+
+def _strip_annotations(candidate: dict) -> dict:
+    return {k: v for k, v in candidate.items() if k not in _ANNOTATION_KEYS}
+
+
+def _engine_note(candidate: dict) -> str:
+    """The verdict engine's reasoning, if it set this finding's status.
+
+    Recording it at commit time is the point: the engine's decision is otherwise
+    a transient object on a job result, so there would be nothing to answer
+    "why is this Confirmed?" once the finding is in the database.
+    """
+    v = candidate.get("_verdict") or {}
+    if not isinstance(v, dict) or not v.get("auto_set"):
+        return ""
+    if v.get("resolved_status") in ("", "Need Review"):
+        return ""
+    conf = v.get("confidence_label") or ""
+    return f"verdict engine ({conf} confidence): {v.get('rationale', '')}".strip()
+
+
 def _annotate(findings, set_status=False):
     """Attach risk, framework, and reviewer assessments, and the deterministic
     verdict resolution.
@@ -474,7 +505,11 @@ def list_findings(project_id: int, user: User = Depends(get_current_user)):
 @app.post("/projects/{project_id}/findings")
 def create_finding(project_id: int, body: FindingIn, user: User = Depends(get_current_user)):
     _require_project(user, project_id)
-    fid = store.create_finding(user.id, project_id, body.data)
+    payload = _strip_annotations(body.data)
+    fid = store.create_finding(
+        user.id, project_id, payload,
+        actor=_actor(user), rationale=_engine_note(body.data),
+    )
     return {"id": fid}
 
 
@@ -492,8 +527,11 @@ def commit_candidates(project_id: int, body: CommitIn, user: User = Depends(get_
         if key in existing_keys:
             skipped += 1
             continue
-        payload = {k: v for k, v in c.items() if k not in ("_uid", "noise", "source", "scanner_confidence", "_risk")}
-        store.create_finding(user.id, project_id, payload)
+        payload = _strip_annotations(c)
+        store.create_finding(
+            user.id, project_id, payload,
+            actor=_actor(user), rationale=_engine_note(c),
+        )
         existing_keys.add(key)
         committed += 1
     return {"committed": committed, "skipped": skipped}
@@ -501,14 +539,14 @@ def commit_candidates(project_id: int, body: CommitIn, user: User = Depends(get_
 
 @app.patch("/findings/{finding_id}")
 def update_finding(finding_id: int, body: FindingIn, user: User = Depends(get_current_user)):
-    if not store.update_finding(user.id, finding_id, body.data):
+    if not store.update_finding(user.id, finding_id, _strip_annotations(body.data), actor=_actor(user)):
         raise HTTPException(status_code=404, detail="Finding not found")
     return {"ok": True}
 
 
 @app.delete("/findings/{finding_id}")
 def delete_finding(finding_id: int, user: User = Depends(get_current_user)):
-    if not store.delete_finding(user.id, finding_id):
+    if not store.delete_finding(user.id, finding_id, actor=_actor(user)):
         raise HTTPException(status_code=404, detail="Finding not found")
     return {"ok": True}
 
@@ -518,10 +556,27 @@ def retest_finding(finding_id: int, body: RetestIn, user: User = Depends(get_cur
     ok = store.set_retest_result(
         user.id, finding_id, body.retest_status, body.retester,
         body.retest_date, body.retest_evidence, body.note,
+        actor=_actor(user),
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Finding not found")
     return {"ok": True}
+
+
+@app.get("/findings/{finding_id}/events")
+def finding_events(finding_id: int, user: User = Depends(get_current_user)):
+    """Audit trail for one finding: every recorded change, oldest first.
+
+    Access is authorized through the finding itself, which is already owner-scoped,
+    so one account cannot read another's history.
+    """
+    if not store.get_finding(user.id, finding_id):
+        raise HTTPException(status_code=404, detail="Finding not found")
+    events = store.get_finding_events(user.id, finding_id)
+    for e in events:
+        at = e.get("created_at")
+        e["created_at"] = at.isoformat() if hasattr(at, "isoformat") else str(at or "")
+    return events
 
 
 # --- Analyze (background job) ------------------------------------------------

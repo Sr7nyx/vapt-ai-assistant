@@ -120,6 +120,23 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_demo_user_time ON demo_runs(user_id, created_at)",
+    """
+    CREATE TABLE IF NOT EXISTS finding_events (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        project_id INTEGER,
+        finding_id INTEGER,
+        actor      TEXT DEFAULT '',
+        action     TEXT DEFAULT '',
+        field      TEXT DEFAULT '',
+        old_value  TEXT DEFAULT '',
+        new_value  TEXT DEFAULT '',
+        rationale  TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_events_finding ON finding_events(finding_id, id)",
+    "CREATE INDEX IF NOT EXISTS idx_events_user ON finding_events(user_id, id)",
 ]
 
 
@@ -249,7 +266,7 @@ def normalize_finding_data(data: dict) -> dict:
     }
 
 
-def create_finding(user_id, project_id, data: dict):
+def create_finding(user_id, project_id, data: dict, actor="", rationale=""):
     if not get_project(user_id, project_id):
         return None  # not the user's project
     d = normalize_finding_data(data)
@@ -273,6 +290,11 @@ def create_finding(user_id, project_id, data: dict):
             d["references_data"], d["created_at"], d["updated_at"],
         ),
     )
+    record_event(
+        user_id, row["id"], project_id, actor=actor, action="created",
+        field="status", new_value=d.get("status", ""),
+        rationale=rationale,
+    )
     return row["id"]
 
 
@@ -293,7 +315,7 @@ def get_finding(user_id, finding_id):
     )
 
 
-def update_finding(user_id, finding_id, data: dict):
+def update_finding(user_id, finding_id, data: dict, actor=""):
     existing = get_finding(user_id, finding_id)
     if not existing:
         return False
@@ -318,13 +340,25 @@ def update_finding(user_id, finding_id, data: dict):
             d["references_data"], d["created_at"], d["updated_at"], finding_id,
         ),
     )
+    for field, before, after in diff_finding(existing, d):
+        record_event(
+            user_id, finding_id, existing.get("project_id"), actor=actor,
+            action="status_changed" if field == "status" else "updated",
+            field=field, old_value=before, new_value=after,
+        )
     return True
 
 
-def delete_finding(user_id, finding_id):
+def delete_finding(user_id, finding_id, actor=""):
     existing = get_finding(user_id, finding_id)
     if not existing:
         return False
+    # Recorded before the row goes, and the event is intentionally left behind:
+    # the trail has to outlive the thing it describes.
+    record_event(
+        user_id, finding_id, existing.get("project_id"), actor=actor, action="deleted",
+        field="title", old_value=existing.get("title", ""),
+    )
     _exec("DELETE FROM findings WHERE id = %s", (finding_id,))
     return True
 
@@ -365,7 +399,7 @@ _RETEST_STATUS_MAP = {
 
 
 def set_retest_result(user_id, finding_id, retest_status, retester="", retest_date="",
-                      retest_evidence="", note=""):
+                      retest_evidence="", note="", actor=""):
     existing = get_finding(user_id, finding_id)
     if not existing:
         return False
@@ -403,6 +437,20 @@ def set_retest_result(user_id, finding_id, retest_status, retester="", retest_da
          (retest_evidence or "").strip(), json.dumps(history), new_notes,
          original_severity, first_found, new_status, now, finding_id),
     )
+    record_event(
+        user_id, finding_id, existing.get("project_id"),
+        actor=actor or (f"retester:{retester}" if retester else ""),
+        action="retested", field="retest_status",
+        old_value=existing.get("retest_status", ""), new_value=retest_status,
+        rationale=(note or "")[:240],
+    )
+    if new_status != existing.get("status", ""):
+        record_event(
+            user_id, finding_id, existing.get("project_id"), actor=actor,
+            action="status_changed", field="status",
+            old_value=existing.get("status", ""), new_value=new_status,
+            rationale=f"retest round {new_round}: {retest_status}",
+        )
     return True
 
 
@@ -518,3 +566,80 @@ def oldest_demo_run_in_window(user_id, window_hours=24):
         (user_id, int(window_hours)),
     )
     return (row or {}).get("oldest")
+
+
+# --- Audit trail --------------------------------------------------------------
+# Findings are mutable and the verdict engine writes to them automatically, so
+# without a trail there is no answer to "who set this to Confirmed, and on what
+# basis". Events are deliberately never deleted with their finding: an audit
+# record that disappears when the thing it describes is removed is not an audit
+# record. That does mean orphaned rows accumulate, which is the correct trade.
+
+# Short fields worth recording by value.
+AUDIT_SCALAR_FIELDS = (
+    "status", "severity", "cvss", "cwe", "title", "category", "environment",
+    "owner", "affected_host", "affected_url", "parameter", "http_method",
+)
+# Long fields where the fact of the edit is the useful signal; storing both full
+# versions of every prose edit would grow the table faster than the findings.
+AUDIT_TEXT_FIELDS = (
+    "description", "evidence", "impact", "scenario", "steps", "remediation",
+    "fp_checks", "additional_remarks", "references_data", "retest_notes",
+)
+
+_AUDIT_MAX = 240
+
+
+def _clip(value):
+    text = "" if value is None else str(value)
+    return text if len(text) <= _AUDIT_MAX else text[: _AUDIT_MAX - 3] + "..."
+
+
+def record_event(user_id, finding_id, project_id=None, actor="", action="",
+                 field="", old_value="", new_value="", rationale=""):
+    """Append one audit row. Failures must never break the operation being
+    audited, so this swallows its own errors and reports success as a boolean."""
+    try:
+        _exec(
+            """
+            INSERT INTO finding_events
+                (user_id, project_id, finding_id, actor, action, field, old_value, new_value, rationale)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, project_id, finding_id, actor or "", action or "", field or "",
+             _clip(old_value), _clip(new_value), _clip(rationale)),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def diff_finding(before: dict, after: dict):
+    """Field-level changes worth auditing, as (field, old, new) tuples."""
+    changes = []
+    for field in AUDIT_SCALAR_FIELDS:
+        old = str((before or {}).get(field, "") or "")
+        new = str((after or {}).get(field, "") or "")
+        if old != new:
+            changes.append((field, old, new))
+    for field in AUDIT_TEXT_FIELDS:
+        old = str((before or {}).get(field, "") or "")
+        new = str((after or {}).get(field, "") or "")
+        if old != new:
+            # Record that it changed and how the new text opens, not both versions.
+            changes.append((field, f"{len(old)} chars", new))
+    return changes
+
+
+def get_finding_events(user_id, finding_id, limit=200):
+    """Audit rows for one finding, oldest first, scoped to the owner."""
+    return _all(
+        """
+        SELECT id, actor, action, field, old_value, new_value, rationale, created_at
+        FROM finding_events
+        WHERE user_id = %s AND finding_id = %s
+        ORDER BY id ASC
+        LIMIT %s
+        """,
+        (user_id, finding_id, int(limit)),
+    )

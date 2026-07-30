@@ -12,7 +12,7 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second. **184 tests.**
+inline in the test file. The suite runs in about a second. **207 tests.**
 
 ## What each file covers
 
@@ -24,11 +24,13 @@ inline in the test file. The suite runs in about a second. **184 tests.**
 | `test_qa_utils.py` | Evidence-grounding, severity-mismatch, prompt-injection, reviewer-verdict, and review-summary parsing | These signals are what stop an unverified finding from reaching a report looking like a fact. |
 | `test_review_slice.py` | Reviewer evidence slicing and the excerpt disclosure | The reviewer sees only the input slice bearing on a finding; the slice must keep that finding's own evidence, and the reviewer must be told when it is an excerpt so trimmed context is not read as missing evidence. |
 | `test_verdict_engine.py` | Deterministic status + confidence, and the asymmetric guardrails | Confidence must be earned from signals agreeing, never manufactured. A well-evidenced finding must never be auto-dismissed, and an ungrounded one never auto-confirmed. |
+| `test_audit.py` | Field diffing, value clipping, and that a failing audit write cannot break the operation it records | Findings are mutable and the engine writes to them automatically; a trail that misses changes, or that takes the edit down with it when it fails, is worse than none. |
+| `test_audit_actor.py` | Actor formatting, annotation stripping, and capture of the engine's rationale | Display-only annotations must never reach the database, and the engine's reasoning has to survive the commit or there is no answer to "why is this Confirmed?". |
 | `test_lane_config.py` | Lane resolution precedence, thread isolation, cross-provider key isolation | Jobs run in worker threads carrying different users' API keys; a module-global override, or a key reused across providers, would send one credential where another belongs. |
 
 `test_review_slice.py` and `test_lane_config.py` import the LLM client, which
-needs `pydantic` and the OpenAI SDK from `requirements.txt`; they skip cleanly if
-those are absent.
+needs `pydantic` and the OpenAI SDK; `test_audit.py` imports the Postgres driver.
+All three are in `requirements.txt` and all three skip cleanly if absent.
 
 ## Regressions pinned here
 

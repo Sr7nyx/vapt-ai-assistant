@@ -57,6 +57,27 @@ The `eval/` directory (repo root) scores this engine on a labelled set:
 precision, recall, false-positive reduction, and evidence-grounding accuracy,
 each with a 95% Wilson interval.
 
+## Audit trail
+
+Findings are mutable and the verdict engine writes to them automatically, so every
+change is recorded in `finding_events`: the actor (`user:<email>`,
+`engine:verdict`, or `retester:<name>`), the action, the field, its old and new
+value, and a rationale. Recording lives inside the data layer rather than the
+route handlers, so a new caller cannot forget it.
+
+Two deliberate choices:
+
+- **Events outlive their finding.** Deleting a finding records the deletion and
+  leaves the history behind. A trail that vanishes with the thing it describes is
+  not a trail. Orphaned rows accumulate, which is the correct trade.
+- **Prose edits record the change, not both versions.** Risk-bearing fields
+  (status, severity, CVSS, CWE, and the asset fields) are stored by value;
+  long-form fields record their previous length and the new opening, so a
+  description rewrite does not store two copies of the description.
+
+An audit write that fails never breaks the operation it describes: losing a
+history row is bad, losing the user's edit is worse.
+
 ## 1. Supabase (Postgres)
 
 1. Create a Supabase project.
@@ -137,6 +158,7 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | POST | `/projects/{id}/findings/commit` | Bulk-commit scanner candidates (asset-aware dedup) |
 | PATCH/DELETE | `/findings/{id}` | Update / delete a finding |
 | POST | `/findings/{id}/retest` | Record a retest outcome |
+| GET | `/findings/{id}/events` | Audit trail for one finding |
 | POST | `/analyze` | Start an analysis job -> `{job_id}` |
 | POST | `/scan/parse` | Upload scanner files -> normalized candidates |
 | POST | `/scan/triage` | Start an AI-triage job -> `{job_id}` |
