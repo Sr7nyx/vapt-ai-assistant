@@ -252,7 +252,7 @@ export default function SettingsPage() {
             className="btn-sm"
             onClick={() => {
               forgetSession();
-              signOut();
+              signOut({ callbackUrl: "/" });
             }}
           >
             Sign out

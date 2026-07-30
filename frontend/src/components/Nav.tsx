@@ -76,7 +76,7 @@ export default function Nav() {
           className="tracking-wide hover:text-danger transition-colors px-1"
           onClick={() => {
             forgetSession();
-            signOut();
+            signOut({ callbackUrl: "/" });
           }}
         >
           [LOG OUT]
