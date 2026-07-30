@@ -68,7 +68,7 @@ export function SelectionBar({
   return (
     <div className="statstrip mb-3 justify-between">
       <span className="flex items-center gap-2">
-        <span className="text-accent">{count}</span>
+        <span className="text-highlight">{count}</span>
         <span className="text-muted">
           {noun}
           {count === 1 ? "" : "s"} selected

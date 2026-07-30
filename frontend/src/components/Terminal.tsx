@@ -14,10 +14,11 @@ export function Stat({
 }: {
   label: string;
   value: ReactNode;
-  tone?: "accent" | "danger" | "warn" | "suspect";
+  tone?: "accent" | "highlight" | "danger" | "warn" | "suspect";
 }) {
   const color =
-    tone === "danger" ? "text-danger"
+    tone === "highlight" ? "text-highlight"
+    : tone === "danger" ? "text-danger"
     : tone === "warn" ? "text-warn"
     : tone === "suspect" ? "text-suspect"
     : tone === "accent" ? "text-accent"

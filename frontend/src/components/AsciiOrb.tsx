@@ -125,13 +125,14 @@ function wordMask(word: string, atCol: number, atRow: number): Set<number> {
 export default function AsciiOrb({
   words = DEFAULT_WORDS,
   hueCycle = true,
-  baseHue = 136,
+  baseHue = 77,
   className = "",
 }: {
   words?: string[];
   /** Cycle the hue over time. Off pins the orb to baseHue. */
   hueCycle?: boolean;
-  /** Starting hue; 136 is the phosphor green the rest of the interface uses. */
+  /** Starting hue; 77 is the lime highlight. 136 is the phosphor green the rest
+   *  of the interface uses, if you would rather it matched the chrome. */
   baseHue?: number;
   className?: string;
 }) {

@@ -25,7 +25,7 @@ export default function SignInGate() {
         <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center">
           <div className="animate-in">
             <div className="text-2xl mb-5 tracking-wide">
-              <span className="text-accent">&gt;</span> vapt<span className="text-accent">.</span>console
+              <span className="text-highlight">&gt;</span> vapt<span className="text-accent">.</span>console
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold leading-tight mb-4">
               AI-assisted vulnerability assessment, <span className="text-accent">with guardrails.</span>
@@ -83,9 +83,9 @@ export default function SignInGate() {
                   going to sign in, so it gets a real button rather than a
                   footnote -- secondary to the primary action, but not buried. */}
               <div className="mt-5 pt-5 border-t border-border/60">
-                <GithubButton full label="GITHUB" />
+                <GithubButton full label="VIEW SOURCE ON GITHUB" />
                 <p className="text-[11px] text-muted mt-2.5 text-center">
-                  Open source under MIT.
+                  Open source under MIT. Read the code without signing in.
                 </p>
               </div>
             </div>

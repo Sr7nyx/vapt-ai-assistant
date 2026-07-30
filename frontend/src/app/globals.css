@@ -7,6 +7,9 @@
   /* One knob for the phosphor. Swap this to #e5a04c for amber or #5fb3ac for the
      previous teal; every accent in the interface follows. */
   --phosphor: 126, 231, 135;
+  /* The live/active highlight. Used for the cursor, the current selection and the
+     orb -- never for structure, which stays on the calmer phosphor. */
+  --highlight: 198, 255, 52;
 }
 
 body {
@@ -141,7 +144,7 @@ body::after {
 
   .caret::after {
     content: "_";
-    @apply text-accent;
+    @apply text-highlight;
     animation: blink 1.1s step-end infinite;
   }
   @media (prefers-reduced-motion: reduce) {

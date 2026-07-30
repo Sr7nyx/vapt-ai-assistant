@@ -48,7 +48,7 @@ export default function Nav() {
   return (
     <aside className="w-60 shrink-0 bg-surface border-r border-border sticky top-0 h-screen p-4 flex flex-col">
       <div className="text-base mb-8 px-2 pt-1 tracking-wide">
-        <span className="text-accent">&gt;</span> vapt<span className="text-accent">.</span>console
+        <span className="text-highlight">&gt;</span> vapt<span className="text-accent">.</span>console
       </div>
       <nav className="flex flex-col gap-0.5">
         {items.map((it) => {
@@ -63,7 +63,7 @@ export default function Nav() {
             >
               {/* The active route is marked with a prompt caret rather than a
                   filled pill, which is how a shell shows you where you are. */}
-              <span className={`w-2 shrink-0 ${active ? "text-accent" : "text-transparent"}`}>&gt;</span>
+              <span className={`w-2 shrink-0 ${active ? "text-highlight" : "text-transparent"}`}>&gt;</span>
               <span className={active ? "text-accent" : "group-hover:text-text transition-colors"}>{it.icon}</span>
               <span className="uppercase text-xs">{it.label}</span>
             </Link>
