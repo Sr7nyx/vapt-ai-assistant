@@ -21,6 +21,8 @@ confirms an ungrounded one (no Confirmed without at least PARTIAL grounding).
 import os
 import re
 
+import verifiers
+
 # Statuses the resolver is allowed to assign. Accepted Risk, Fixed and the retest
 # outcomes are human and business decisions and are never set automatically.
 STATUS_CONFIRMED = "Confirmed"
@@ -85,8 +87,14 @@ def _auto_status_enabled():
     return (os.environ.get("VAPT_AUTO_STATUS") or "1").strip().lower() in ("1", "true", "yes", "on")
 
 
-def resolve_verdict(finding, review=None):
+def resolve_verdict(finding, review=None, verification=None):
     """Return a deterministic decision for a finding given its review signals.
+
+    `verification` is the result of a mechanical check of the claim against its
+    evidence. Where one exists it outranks the reviewer, because a parsed response
+    header is a fact and a reviewer verdict is an opinion. A REFUTED claim cannot
+    be confirmed no matter how confident the model was; a CONFIRMED one cannot be
+    dismissed on model doubt alone.
 
     Result keys:
       resolved_status  Confirmed | False Positive | Need Review
@@ -107,7 +115,9 @@ def resolve_verdict(finding, review=None):
     verdict_lean = _verdict_lean(review)
     reviewed = bool(review.get("reviewed"))
 
+    verified = (verification or {}).get("status", "")
     signals = {
+        "verification": verified or "not applicable",
         "grounding": grounding or "n/a",
         "exploitability": exploit or "n/a",
         "false_positive_risk": fp_risk or "n/a",
@@ -145,6 +155,13 @@ def resolve_verdict(finding, review=None):
     score = 0.0
     reasons = []
 
+    # A mechanical check is worth more than any model signal, because it is
+    # reproducible and can be shown to a client.
+    if verified == verifiers.CONFIRMED:
+        score += 3.0; reasons.append("claim mechanically verified against the evidence")
+    elif verified == verifiers.REFUTED:
+        score -= 4.0; reasons.append("claim mechanically contradicted by the evidence")
+
     if grounding == "VERIFIED":
         score += 2.0; reasons.append("evidence verified")
     elif grounding == "PARTIAL":
@@ -171,14 +188,19 @@ def resolve_verdict(finding, review=None):
         reasons.append("reviewer judged valid")
 
     # Guardrails that override the score, encoding the asymmetric cost of errors.
-    well_evidenced = grounding == "VERIFIED" and exploit == "demonstrated"
-    ungrounded = grounding in ("UNVERIFIED", "NO EVIDENCE", "NO SOURCE", "")
+    well_evidenced = (grounding == "VERIFIED" and exploit == "demonstrated") or verified == verifiers.CONFIRMED
+    ungrounded = grounding in ("UNVERIFIED", "NO EVIDENCE", "NO SOURCE", "") and verified != verifiers.CONFIRMED
 
     decided = None
-    if score >= 3.0 and grounding in ("VERIFIED", "PARTIAL"):
+    if score >= 3.0 and (grounding in ("VERIFIED", "PARTIAL") or verified == verifiers.CONFIRMED):
         decided = STATUS_CONFIRMED
     elif score <= -3.0 and not well_evidenced:
         decided = STATUS_FALSE_POSITIVE
+
+    # A refuted claim is never confirmed, whatever the reviewer thought.
+    if verified == verifiers.REFUTED and decided == STATUS_CONFIRMED:
+        decided = None
+        reasons.append("withheld: the evidence contradicts the claim")
 
     # A confirmation with no grounding is never allowed, whatever the score.
     if decided == STATUS_CONFIRMED and ungrounded:
@@ -223,10 +245,10 @@ def resolve_verdict(finding, review=None):
     }
 
 
-def apply_resolution(finding, review=None):
+def apply_resolution(finding, review=None, verification=None):
     """Attach the resolution to a finding and, when enabled and confident, set the
     status. Never overwrites a status a human or a retest already assigned."""
-    res = resolve_verdict(finding, review)
+    res = resolve_verdict(finding, review, verification)
     finding["_verdict"] = res
     if not res["auto_set"]:
         return finding

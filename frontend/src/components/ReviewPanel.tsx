@@ -1,5 +1,5 @@
 "use client";
-import { ReviewSummary, VerdictResolution } from "@/lib/types";
+import { ReviewSummary, VerdictResolution, Verification } from "@/lib/types";
 
 const VERDICT_TONE: Record<string, string> = {
   "likely false positive": "border-danger/60 text-danger",
@@ -27,6 +27,22 @@ export function VerdictBadge({ verdict }: { verdict?: VerdictResolution }) {
       {verdict.confidence > 0 && s !== "Need Review" && (
         <span className="opacity-70"> {Math.round(verdict.confidence * 100)}%</span>
       )}
+    </span>
+  );
+}
+
+/** Mechanical-verification chip. Distinct from the reviewer's chip on purpose:
+ *  this one is a parsed fact, not a second opinion, and the interface should not
+ *  let the two look interchangeable. */
+export function VerifiedChip({ verification }: { verification?: Verification }) {
+  if (!verification || verification.status === "INSUFFICIENT") return null;
+  const refuted = verification.status === "REFUTED";
+  return (
+    <span
+      className={`chip ${refuted ? "border-danger/70 text-danger" : "border-accent/70 text-accent"}`}
+      title={verification.summary}
+    >
+      {refuted ? "CONTRADICTED BY EVIDENCE" : "VERIFIED BY CHECK"}
     </span>
   );
 }
@@ -62,11 +78,13 @@ export function ReviewFlag({ review }: { review?: ReviewSummary }) {
 export default function ReviewPanel({
   review,
   verdict,
+  verification,
 }: {
   review?: ReviewSummary;
   verdict?: VerdictResolution;
+  verification?: Verification;
 }) {
-  if (!review && !verdict) return null;
+  if (!review && !verdict && !verification) return null;
 
   // The "not reviewed" note only applies when there is a review object and no
   // verdict to show; with a verdict present we render the resolution instead.
@@ -103,6 +121,33 @@ export default function ReviewPanel({
           <p className="text-xs text-muted mt-1.5">{verdict.rationale}</p>
         </div>
       )}
+      {verification && verification.status !== "INSUFFICIENT" && (
+        <div className="px-3 py-2 border-b border-border/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted uppercase tracking-wide">Deterministic check</span>
+            <VerifiedChip verification={verification} />
+          </div>
+          <p className="text-xs text-muted mt-1.5">
+            Checked by parsing the evidence, not by asking a model.
+          </p>
+          <ul className="mt-2 grid gap-1">
+            {verification.checks
+              .filter((c) => c.status !== "INSUFFICIENT")
+              .map((c, i) => (
+                <li key={i} className="text-xs">
+                  <span className={c.status === "REFUTED" ? "text-danger" : "text-accent"}>
+                    {c.status}
+                  </span>{" "}
+                  <span className="text-muted">({c.verifier})</span> {c.detail}
+                  {c.evidence && (
+                    <span className="block font-mono text-muted mt-0.5 truncate">{c.evidence}</span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
       {review?.reviewed && (
       <div className="px-3 py-2 border-b border-border/60 flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted uppercase tracking-wide">Skeptical review</span>

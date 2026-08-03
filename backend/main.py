@@ -40,6 +40,7 @@ import scan_import
 import risk_map
 import qa_utils
 import verdict_engine
+import verifiers
 import input_guard
 import exporter
 from collections import Counter
@@ -464,8 +465,8 @@ def _actor(user: User) -> str:
 
 
 # Display-only annotations that must never be written to a finding's columns.
-_ANNOTATION_KEYS = ("_verdict", "_review", "_assessment", "_risk", "_uid", "noise",
-                    "source", "scanner_confidence")
+_ANNOTATION_KEYS = ("_verdict", "_review", "_verification", "_assessment", "_risk", "_uid",
+                    "noise", "source", "scanner_confidence")
 
 
 def _strip_annotations(candidate: dict) -> dict:
@@ -503,10 +504,16 @@ def _annotate(findings, set_status=False):
         f["_assessment"] = risk_map.assess(f)
         review = qa_utils.review_summary(f)
         f["_review"] = review
+        # Re-run the mechanical check on read: it is free, and it means a stored
+        # finding shows the same verification a fresh one does, even if the
+        # verifiers have improved since it was committed.
+        verification = f.get("_verification") or verifiers.verify_finding(f)
+        if verification:
+            f["_verification"] = verification
         if set_status:
-            verdict_engine.apply_resolution(f, review)  # sets f["_verdict"], may set f["status"]
+            verdict_engine.apply_resolution(f, review, verification)
         else:
-            f["_verdict"] = verdict_engine.resolve_verdict(f, review)
+            f["_verdict"] = verdict_engine.resolve_verdict(f, review, verification)
     return findings
 
 

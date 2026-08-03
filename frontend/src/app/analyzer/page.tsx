@@ -15,8 +15,8 @@ import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
-import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
-import { ReviewSummary, VerdictResolution } from "@/lib/types";
+import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag, VerifiedChip } from "@/components/ReviewPanel";
+import { ReviewSummary, VerdictResolution, Verification } from "@/lib/types";
 
 const ANALYSIS_TYPES = [
   "OWASP Top 10 Analysis",
@@ -364,6 +364,7 @@ export default function AnalyzerPage() {
                     <span className={sevClass(f.severity as string)}>{f.severity as string}</span>
                     <span className="font-medium">{f.title as string}</span>
                     <VerdictBadge verdict={f._verdict as VerdictResolution | undefined} />
+                    <VerifiedChip verification={f._verification as Verification | undefined} />
                     <VerdictChip review={f._review as ReviewSummary | undefined} />
                     <ReviewFlag review={f._review as ReviewSummary | undefined} />
                   </div>
@@ -380,7 +381,7 @@ export default function AnalyzerPage() {
                   Edit
                 </button>
               </div>
-              <ReviewPanel review={f._review as ReviewSummary | undefined} verdict={f._verdict as VerdictResolution | undefined} />
+              <ReviewPanel review={f._review as ReviewSummary | undefined} verdict={f._verdict as VerdictResolution | undefined} verification={f._verification as Verification | undefined} />
             </div>
           ))}
         </div>

@@ -23,6 +23,7 @@ export interface Finding {
   _assessment?: { risk?: { priority?: string; score?: number }; frameworks?: Record<string, string> };
   _review?: ReviewSummary;
   _verdict?: VerdictResolution;
+  _verification?: Verification;
   [k: string]: unknown;
 }
 
@@ -113,4 +114,17 @@ export interface UsageSummary {
   total_tokens: number;
   by_model: { model: string; calls: number; total_tokens: number }[];
   window?: string;
+}
+
+export interface VerificationCheck {
+  status: string;
+  verifier: string;
+  detail: string;
+  evidence: string;
+}
+
+export interface Verification {
+  status: string;
+  checks: VerificationCheck[];
+  summary: string;
 }

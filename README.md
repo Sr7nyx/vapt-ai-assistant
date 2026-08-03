@@ -16,16 +16,53 @@ This tool treats the model as a fast, tireless junior analyst whose every claim 
 
 | Guardrail | What it does |
 | --- | --- |
+| **Deterministic verification** | Where a claim can be settled by parsing the evidence -- a security header present or absent, a payload reflected raw or encoded, a request answered 200 or 403 -- it is checked in code rather than by asking a model. A contradicted claim can never be auto-confirmed, whatever the reviewer concluded. |
 | **Deterministic CVSS v3.1** | Base scores are computed from the vector in code. The model does not get to do the math. |
 | **Evidence grounding** | Each finding's "proof" is checked against the source material and labelled VERIFIED / PARTIAL / UNVERIFIED to catch fabrication. |
 | **Adversarial review pass** | A second, reasoning-grade model argues the skeptical case — could this be a false positive? what benign explanation fits the same evidence? — and returns a verdict. |
 | **Prompt-injection handling** | Scanner output and target responses are untrusted input. They are fenced, and the model is instructed to treat them as data, not instructions. |
 | **Severity cross-check** | Model-assigned severity is compared against the computed CVSS band, and disagreements are flagged rather than silently resolved. |
+| **Input gate** | Submissions with no security-relevant structure are refused before any model call, so nothing is spent proving that non-evidence is not a vulnerability. The check keys on structure, never on tone: a rude payload is evidence, a rude sentence is not. |
 | **Deterministic verdict** | The reviewer's hedged signals are combined by a fixed rule into a status and a confidence score. Confidence is earned by signals agreeing, not by asking the model to sound certain, and genuinely ambiguous findings are held for review rather than forced. |
 
 Findings that fail any of these checks are surfaced with a verification flag instead of being quietly dressed up as facts.
 
 ---
+
+## Checking claims instead of asking twice
+
+The skeptical reviewer is a second model auditing the first, which would leave the
+central claim of this project -- that a finding is real only when the evidence
+proves it -- resting on one model's opinion of another's output.
+
+So where a claim can be settled mechanically, it is. `verifiers.py` parses the
+evidence and returns one of three answers per check:
+
+| | |
+| --- | --- |
+| `CONFIRMED` | the evidence demonstrably supports the claim |
+| `REFUTED` | the evidence demonstrably contradicts it |
+| `INSUFFICIENT` | the evidence does not contain what is needed to decide |
+
+Covered today: missing security headers, cookie attributes, CORS policy, reflected
+payloads, deprecated TLS versions, access-control claims against response status,
+and directory listings. Each parses the actual HTTP evidence -- a header is present
+or it is not, and no opinion is required to establish which.
+
+`REFUTED` is the valuable outcome: a hallucination caught by code rather than by a
+second opinion, reproducible and demonstrable to a client. A refuted claim can
+never be auto-confirmed no matter how confident the reviewer was, and a mechanical
+confirmation protects a finding from being dismissed on model doubt alone.
+
+Two rules keep the layer from doing harm. Silence is never refutation: evidence
+without a `Set-Cookie` header does not disprove a cookie finding, because the
+response that set it may simply not be in the excerpt, so verifiers return
+`INSUFFICIENT` unless the evidence positively settles the question. And a verifier
+that raises can never break an analysis -- it degrades to `INSUFFICIENT`.
+
+Most finding classes cannot be settled from text alone, and for those the layer
+returns nothing at all rather than guessing. That is the honest answer, and it is
+why the reviewer still exists.
 
 ## From signals to a verdict
 
@@ -50,6 +87,12 @@ ambiguous evidence is the failure this tool exists to prevent.
 Findings that clear the bar have their status set automatically (this can be
 disabled with `VAPT_AUTO_STATUS=0`); a status a human or a retest has already set
 is never overwritten.
+
+Because an automated actor is writing to findings, every change is recorded. Each
+finding carries an audit trail naming who changed what and when -- a person, the
+verdict engine, or a retester -- and the engine's rationale is persisted alongside
+the status it set, so "why is this Confirmed?" has an answer in the data rather
+than only in a transient job result.
 
 The [`eval/`](eval/) directory holds a labelled set and a harness that scores this
 engine on precision, recall, false-positive reduction, and evidence-grounding
@@ -82,8 +125,8 @@ non-zero if the engine ever dismisses a real finding.
 
 **Workflow and reporting**
 - Multi-project workspace with per-user isolation
-- Filterable findings list with expandable detail, inline editing, and retest recording (outcome, retester, date, evidence, notes) across rounds
-- One-click export to DOCX, PDF, XLSX, and JSON, enriched with risk, framework, and retest data
+- Filterable findings list with expandable detail, inline editing, multi-select bulk actions, and retest recording (outcome, retester, date, evidence, notes) across rounds
+- Export to DOCX, PDF, XLSX, and JSON, enriched with risk, framework, and retest data, over the whole project or a chosen subset of findings
 - Aggregate dashboard across all projects: severity/status/category breakdowns, risk priorities, OWASP coverage, verification flags, and token usage
 
 **Model configuration**
@@ -264,18 +307,21 @@ All endpoints require a Google ID token as `Authorization: Bearer <token>` and a
 | `GET` | `/health` | Liveness |
 | `GET` | `/me` | Current user |
 | `GET` | `/overview` | Aggregate dashboard across all projects |
-| `GET` | `/usage` | LLM usage summary |
+| `GET` | `/usage` | LLM usage summary, optionally windowed |
 | `GET` `POST` | `/projects` | List / create projects |
 | `GET` `DELETE` | `/projects/{id}` | Get / delete a project |
 | `GET` `POST` | `/projects/{id}/findings` | List (with risk and framework mapping) / create |
 | `POST` | `/projects/{id}/findings/commit` | Bulk-commit scanner candidates with asset-aware dedup |
 | `PATCH` `DELETE` | `/findings/{id}` | Update / delete a finding |
+| `POST` | `/findings/bulk-delete` | Delete several findings at once |
 | `POST` | `/findings/{id}/retest` | Record a retest outcome |
 | `POST` | `/analyze` | Start an analysis job |
+| `POST` | `/llm/precheck` | Whether input looks like evidence, without running anything |
 | `POST` | `/scan/parse` | Upload scanner files, get normalized candidates |
 | `POST` | `/scan/triage` | Start an AI triage job |
 | `GET` | `/jobs/{id}` | Poll a background job |
 | `POST` | `/projects/{id}/report` | Export DOCX / PDF / XLSX / JSON |
+| `GET` | `/findings/{id}/events` | Audit trail for one finding |
 | `GET` | `/demo/quota` | Remaining shared-key runs for this user |
 | `GET` | `/llm/providers` | Allowlisted provider hosts |
 | `POST` | `/llm/lanes` | Resolved provider and model per lane (no keys returned) |
@@ -312,7 +358,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest
 ```
 
-184 offline unit tests covering the SSRF guard on user-supplied provider URLs,
+269 offline unit tests covering the SSRF guard on user-supplied provider URLs,
 every scanner parser, risk and framework mapping, verification-signal parsing,
 the thread isolation that keeps one user's API key out of another user's
 concurrent job, and the deterministic verdict engine. A separate labelled

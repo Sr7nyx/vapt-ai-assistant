@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/Loading";
 import FindingEditor from "@/components/FindingEditor";
 import RetestModal from "@/components/RetestModal";
 import MultiSelect from "@/components/MultiSelect";
-import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
+import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag, VerifiedChip } from "@/components/ReviewPanel";
 import AuditTrail from "@/components/AuditTrail";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
@@ -222,6 +222,7 @@ export default function FindingsPage() {
                       {asset && <span className="text-accent text-xs truncate max-w-[240px] hidden lg:inline">{asset}</span>}
                       <span className="flex gap-1 shrink-0">
                         <VerdictBadge verdict={f._verdict} />
+                        <VerifiedChip verification={f._verification} />
                         <VerdictChip review={f._review} />
                         <ReviewFlag review={f._review} />
                       </span>
@@ -244,7 +245,7 @@ export default function FindingsPage() {
                             {asset}
                           </a>
                         )}
-                        <ReviewPanel review={f._review} verdict={f._verdict} />
+                        <ReviewPanel review={f._review} verdict={f._verdict} verification={f._verification} />
                         {typeof f.description === "string" && f.description && <Detail label="Description">{f.description}</Detail>}
                         {typeof f.evidence === "string" && f.evidence && <Detail label="Evidence" mono>{f.evidence}</Detail>}
                         {typeof f.remediation === "string" && f.remediation && <Detail label="Remediation">{f.remediation}</Detail>}

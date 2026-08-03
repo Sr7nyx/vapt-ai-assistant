@@ -8,6 +8,8 @@ import difflib
 import threading
 from contextlib import contextmanager
 from urllib.parse import urlparse
+
+import verifiers
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 
@@ -1151,6 +1153,20 @@ def analyze_vapt_data(api_key: str, analysis_type: str, raw_input: str, usage_si
     _progress(0.35, f"{len(findings)} finding(s) found - scoring and enriching\u2026")
     findings = [_postprocess_finding(f, raw_input) for f in findings]
     findings = _enrich_findings(findings)
+
+    # Mechanical verification runs BEFORE the reviewer and costs nothing. Where a
+    # claim can be checked against the evidence in code, the result is a fact
+    # rather than a second opinion, and it is recorded on the finding so the
+    # verdict engine can weight it above anything the models said.
+    _progress(0.45, "Verifying claims against the evidence\u2026")
+    for f in findings:
+        result = verifiers.verify_finding(f, raw_input)
+        if result:
+            f["_verification"] = result
+            f["additional_remarks"] = _append_remark(
+                {"additional_remarks": f.get("additional_remarks", "")},
+                f"- Deterministic check: {result['status']}. {result['summary']}",
+            )["additional_remarks"]
 
     if _skeptical_review_enabled():
         _progress(0.5, "Starting skeptical review\u2026")
