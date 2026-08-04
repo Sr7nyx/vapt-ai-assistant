@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useCallback, useEffect } from "react";
 import TopNav from "./TopNav";
 import StatusLine from "./StatusLine";
+import CommandPalette from "./CommandPalette";
 import SignInGate from "./SignInGate";
 import { Spinner } from "./Loading";
 import { bindSessionOwner, forgetSession } from "@/lib/prefs";
@@ -77,6 +78,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           unreadable on ultrawide displays. */}
       <main className="flex-1 min-w-0 w-full max-w-[1800px] px-4 py-5">{children}</main>
       <Onboarding />
+      <CommandPalette />
       {secondsLeft !== null && (
         <IdleWarning
           secondsLeft={secondsLeft}

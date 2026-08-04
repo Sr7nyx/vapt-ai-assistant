@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { Project } from "@/lib/types";
 import { useProject } from "@/lib/ProjectContext";
+import { openCommandPalette } from "./CommandPalette";
 
 /**
  * Command bar and tab strip.
@@ -72,6 +73,15 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
         </label>
 
         <div className="flex-1" />
+
+        <button
+          onClick={openCommandPalette}
+          aria-label="Open command palette"
+          className="hidden sm:flex items-center gap-1.5 rounded-lg border border-border px-2 py-0.5 text-[10px] tracking-widest text-muted hover:border-accent/60 hover:text-accent transition-colors"
+        >
+          <span className="text-highlight">&gt;</span>
+          <kbd className="font-mono">CTRL K</kbd>
+        </button>
 
         <span className="text-[10px] tracking-widest text-muted truncate hidden md:inline">
           {session?.user?.email}
