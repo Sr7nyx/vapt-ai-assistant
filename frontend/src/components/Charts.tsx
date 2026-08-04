@@ -26,12 +26,17 @@ export function SeverityBar({ rows }: { rows: Row[] }) {
   return (
     <div className="grid gap-2">
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-white/5">
-        {present.map((r) => (
+        {present.map((r, i) => (
           <div
             key={r.label}
-            style={{ width: `${(r.count / total) * 100}%`, background: SEVERITY_COLOR[r.label] }}
+            style={{
+              width: `${(r.count / total) * 100}%`,
+              background: SEVERITY_COLOR[r.label],
+              animationDelay: `${i * 60}ms`,
+              animationFillMode: "backwards",
+            }}
             title={`${r.label}: ${r.count}`}
-            className="transition-all"
+            className="grow-x transition-all"
           />
         ))}
       </div>
@@ -73,7 +78,7 @@ export function BarList({
               <div className={`text-xs truncate mb-1 ${muted ? "text-muted" : ""}`}>{r.label}</div>
               <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${muted ? "bg-muted/40" : "bg-accent"}`}
+                  className={`grow-x h-full rounded-full transition-all ${muted ? "bg-muted/40" : "bg-accent"}`}
                   style={{ width: `${Math.max(2, (r.count / max) * 100)}%` }}
                 />
               </div>

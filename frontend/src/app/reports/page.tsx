@@ -143,7 +143,7 @@ export default function ReportsPage() {
             </button>
 
             {pick && (
-              <div className="border border-border/60 rounded-lg max-h-72 overflow-y-auto">
+              <div className="border border-border/60 rounded-lg pane-scroll max-h-72 overflow-y-auto">
                 <div className="flex items-center gap-3 px-3 py-2 border-b border-border/60 sticky top-0 bg-surface">
                   <MasterCheckbox
                     allSelected={sel.allSelected}

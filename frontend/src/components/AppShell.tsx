@@ -76,7 +76,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
           capping it at 1024px is what makes an application look templated. The
           cap here is generous and exists only to stop line lengths becoming
           unreadable on ultrawide displays. */}
-      <main className="flex-1 min-w-0 w-full max-w-[1800px] px-4 py-5">{children}</main>
+      {/* Keyed on the route so each navigation replays the entrance. Without the
+          key React reuses the node and the transition only ever runs once. */}
+      <main key={pathname} className="route-in flex-1 min-w-0 w-full max-w-[1800px] px-4 py-5">
+        {children}
+      </main>
       <Onboarding />
       <CommandPalette />
       {secondsLeft !== null && (

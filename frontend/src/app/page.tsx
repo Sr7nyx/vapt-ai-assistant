@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList, Panel } from "@/components/Charts";
 import { SectionHeading } from "@/components/Terminal";
+import { useCountUp } from "@/hooks/useCountUp";
 import { UsageSummary } from "@/lib/types";
 
 type Accent = "danger" | "warn" | "accent" | undefined;
@@ -165,10 +166,15 @@ export default function Dashboard() {
 function Metric({ label, value, accent }: { label: string; value: number | string; accent?: Accent }) {
   const color =
     accent === "danger" ? "text-danger" : accent === "warn" ? "text-warn" : accent === "accent" ? "text-accent" : "";
+  // Only numbers count up. A string is a label, and animating it would be theatre.
+  const numeric = typeof value === "number";
+  const counted = useCountUp(numeric ? value : 0);
   return (
     <div className="card card-hover">
       <div className="text-muted text-xs uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${color}`}>{value}</div>
+      <div className={`text-2xl mt-1 tabular-nums ${color}`}>
+        {numeric ? counted.toLocaleString() : value}
+      </div>
     </div>
   );
 }

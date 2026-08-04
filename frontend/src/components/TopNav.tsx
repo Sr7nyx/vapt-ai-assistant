@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { Project } from "@/lib/types";
@@ -36,6 +36,8 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
   const token = session?.id_token;
   const { projectId, setProjectId } = useProject();
   const [projects, setProjects] = useState<Project[]>([]);
+  const stripRef = useRef<HTMLElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -43,6 +45,35 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
   }, [token]);
 
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+
+  /* A border on the active tab jumps; one indicator that slides between tabs reads
+     as a single object moving, which is what makes navigation feel deliberate.
+     Measured from the DOM because the tabs are text and their widths differ. */
+  const place = useCallback(() => {
+    const strip = stripRef.current;
+    const el = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!strip || !el) {
+      setBar(null);
+      return;
+    }
+    setBar({ left: el.offsetLeft - strip.scrollLeft, width: el.offsetWidth });
+  }, []);
+
+  useLayoutEffect(() => {
+    place();
+  }, [place, path, projects.length]);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    window.addEventListener("resize", place);
+    strip?.addEventListener("scroll", place, { passive: true });
+    // Fonts land after first paint and change tab widths, so re-measure once they do.
+    (document as Document & { fonts?: FontFaceSet }).fonts?.ready.then(place).catch(() => {});
+    return () => {
+      window.removeEventListener("resize", place);
+      strip?.removeEventListener("scroll", place);
+    };
+  }, [place]);
 
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur border-b border-border">
@@ -96,7 +127,14 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
 
       {/* Tab strip. Scrolls horizontally rather than wrapping, so the chrome
           height never changes as the window narrows. */}
-      <nav className="flex items-stretch overflow-x-auto no-scrollbar">
+      <nav ref={stripRef} className="relative flex items-stretch overflow-x-auto no-scrollbar">
+        {bar && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-0 h-0.5 bg-highlight transition-all duration-300 ease-out"
+            style={{ left: bar.left, width: bar.width }}
+          />
+        )}
         {TABS.map((t) => {
           const on = active(t.href);
           return (
@@ -104,10 +142,8 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
               key={t.href}
               href={t.href}
               aria-current={on ? "page" : undefined}
-              className={`px-3.5 py-2 text-[11px] tracking-widest whitespace-nowrap border-b-2 transition-colors ${
-                on
-                  ? "border-highlight text-highlight bg-highlight/5"
-                  : "border-transparent text-muted hover:text-text hover:bg-white/5"
+              className={`px-3.5 py-2 text-[11px] tracking-widest whitespace-nowrap transition-colors ${
+                on ? "text-highlight bg-highlight/5" : "text-muted hover:text-text hover:bg-white/5"
               }`}
             >
               {on ? `[${t.label}]` : t.label}

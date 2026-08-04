@@ -44,6 +44,52 @@ body::after {
   body::after { display: none; }
 }
 
+
+/* A thin phosphor scrollbar. The default chrome scrollbar is the loudest piece of
+   operating-system furniture on the page and undoes a dark, dense theme instantly.
+   Firefox gets the standard properties; Chromium and Safari get the pseudo-element
+   rules below. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--phosphor), 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(var(--phosphor), 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--phosphor), 0.42);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html {
+  /* Smooth anchor and programmatic scrolling. Guarded, because forcing smooth
+     scroll on someone who has asked for reduced motion can trigger nausea. */
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Momentum scrolling inside panes on touch, and stop a scrolled pane from
+   dragging the whole page once it hits its end. */
+.pane-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -63,6 +109,14 @@ body::after {
 @keyframes orbDrift {
   0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); opacity: 0.18; }
   50% { transform: translateY(-14px) rotate(var(--rot, 0deg)); opacity: 0.4; }
+}
+@keyframes routeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes growWidth {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 @keyframes blink {
   0%, 49% { opacity: 1; }
@@ -152,6 +206,20 @@ body::after {
     display: none;
   }
 
+  /* Applied to the main content and keyed on the route, so navigating replays it.
+     Short and small on purpose: a page that slides in from far away feels slow
+     however fast it actually is. */
+  .route-in {
+    animation: routeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .grow-x {
+    transform-origin: left;
+    animation: growWidth 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .route-in, .grow-x { animation: none; }
+  }
+
   .caret::after {
     content: "_";
     @apply text-highlight;
@@ -178,11 +246,37 @@ body::after {
     display: none;
   }
 
+  /* Applied to the main content and keyed on the route, so navigating replays it.
+     Short and small on purpose: a page that slides in from far away feels slow
+     however fast it actually is. */
+  .route-in {
+    animation: routeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .grow-x {
+    transform-origin: left;
+    animation: growWidth 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .route-in, .grow-x { animation: none; }
+  }
+
   .caret::after { animation: none; }
   }
 
   .animate-in {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Every entrance in one place. Motion is a preference the operating system
+     already knows about, and honouring it is not optional on a tool people use
+     for hours. */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-in,
+    .stagger > *,
+    .toast,
+    .modal-panel,
+    .modal-backdrop {
+      animation: none;
+    }
   }
   .stagger > * {
     animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
