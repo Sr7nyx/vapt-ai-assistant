@@ -51,7 +51,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-motion="on">
+      {/* Applied before paint. Without this the document renders with the default
+          and then flips, which is a visible flash for anyone who chose reduced. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "try{var m=localStorage.getItem('vapt_motion');" +
+            "document.documentElement.setAttribute('data-motion'," +
+            "m==='system'||m==='reduced'?m:'on');}catch(e){}",
+        }}
+      />
       <body>
         <Providers>
           <AppShell>{children}</AppShell>

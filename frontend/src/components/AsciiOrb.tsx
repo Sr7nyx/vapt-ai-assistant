@@ -1,5 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { motionReduced } from "@/lib/motion";
 
 /**
  * An ASCII orb.
@@ -183,9 +184,7 @@ export default function AsciiOrb({
   }, [words]);
 
   useEffect(() => {
-    const reduced =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = motionReduced();
 
     const s = st.current;
     s.start = performance.now();

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { motionReduced } from "@/lib/motion";
 
 /**
  * Animate a number up to its value.
@@ -19,7 +20,7 @@ export function useCountUp(target: number, durationMs = 650): number {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = motionReduced();
     if (reduced || !Number.isFinite(target) || target === 0) {
       setValue(target);
       from.current = target;

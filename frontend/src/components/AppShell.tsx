@@ -11,6 +11,7 @@ import { bindSessionOwner, forgetSession } from "@/lib/prefs";
 import Onboarding from "./Onboarding";
 import IdleWarning from "./IdleWarning";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
+import { applyMotion } from "@/lib/motion";
 
 /** Idle timeout, matching the convention of tools like Nessus. Raising this is a
  *  security decision, not a preference, which is why it is a constant here rather
@@ -30,6 +31,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (typeof window !== "undefined" && status === "authenticated") {
     bindSessionOwner(session?.user?.email || "");
   }
+
+  // Re-assert on mount: the inline bootstrap runs once, and a second tab that
+  // changed the setting should be reflected here on next load.
+  useEffect(() => {
+    applyMotion();
+  }, []);
 
   const endSession = useCallback(() => {
     // Clearing the browser-held provider key is the security-relevant half; the

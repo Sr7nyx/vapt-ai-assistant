@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import { GithubButton, SourceFooter, GithubMark, REPO_URL } from "@/components/SourceLinks";
 import InfoHint, { LabelWithHint } from "@/components/InfoHint";
+import { getMotion, setMotion, MotionSetting } from "@/lib/motion";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
@@ -32,10 +33,12 @@ export default function SettingsPage() {
   const [result, setResult] = useState<TestState>(null);
   const [hosts, setHosts] = useState<string[]>([]);
   const [remember, setRemember] = useState(false);
+  const [motion, setMotionState] = useState<MotionSetting>("on");
 
   useEffect(() => {
     setCfg(getLlmConfig());
     setRemember(getRemember());
+    setMotionState(getMotion());
   }, []);
   useEffect(() => {
     if (token) api.llmProviders(token).then((r) => setHosts(r.allowed_hosts)).catch(() => {});
@@ -247,6 +250,59 @@ export default function SettingsPage() {
             Clear
           </button>
         </div>
+      </section>
+
+      <section className="card grid gap-3">
+        <div className="flex items-center gap-1.5">
+          <h2 className="term-h text-muted">Interface</h2>
+          <InfoHint label="About motion">
+            Animations are on by default. Your operating system exposes a
+            &quot;reduce motion&quot; preference, but on a managed device it is often
+            set by policy rather than chosen, so following it silently would leave
+            you with an accommodation you never asked for and no way back.
+            <span className="block mt-2">
+              Choose <span className="text-text">Follow system</span> to honour the
+              operating system, or <span className="text-text">Reduced</span> to turn
+              animation off regardless.
+            </span>
+          </InfoHint>
+        </div>
+
+        <fieldset className="grid gap-2">
+          <legend className="sr-only">Motion</legend>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["on", "Always on"],
+                ["system", "Follow system"],
+                ["reduced", "Reduced"],
+              ] as [MotionSetting, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={motion === value}
+                onClick={() => {
+                  setMotionState(value);
+                  setMotion(value);
+                  window.dispatchEvent(new Event("vapt:motion"));
+                  notify(`Motion: ${label.toLowerCase()}`, "success");
+                }}
+                className={`rounded-lg border px-3 py-1 text-xs tracking-wide transition-all ${
+                  motion === value
+                    ? "border-accent/70 text-accent"
+                    : "border-border text-muted hover:border-accent/50 hover:text-text"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted">
+            Takes effect immediately for CSS animation; the sign-in visuals pick it up on
+            next load.
+          </p>
+        </fieldset>
       </section>
 
       <section className="card grid gap-3">

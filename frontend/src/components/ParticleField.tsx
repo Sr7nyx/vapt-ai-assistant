@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { motionReduced } from "@/lib/motion";
 
 // A calm constellation particle field in the app's teal accent. Pure canvas,
 // no dependencies. Respects reduced-motion, handles resize, and cleans up.
@@ -12,7 +13,7 @@ export default function ParticleField() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = motionReduced();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const ACCENT = "95, 179, 172";
     const LINE_DIST = 130;

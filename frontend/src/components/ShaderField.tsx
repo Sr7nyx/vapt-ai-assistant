@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { motionReduced } from "@/lib/motion";
 
 // A slow, drifting aurora rendered by a raw WebGL fragment shader (domain-warped
 // fBm noise) in the app's accent teal. No three.js and no dependencies -- just a
@@ -7,7 +8,7 @@ import { useEffect, useRef } from "react";
 //
 // Degrades gracefully: if WebGL is unavailable or the program fails to compile,
 // nothing is drawn and the layers above (particles, content) still render.
-// Honors prefers-reduced-motion by drawing a single static frame.
+// Honors the resolved motion preference by drawing a single static frame.
 
 const VERT = `
 attribute vec2 a_pos;
@@ -141,7 +142,7 @@ export default function ShaderField({
     const uIntensity = gl.getUniformLocation(program, "u_intensity");
     gl.uniform1f(uIntensity, intensity);
 
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = motionReduced();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let raf = 0;
 
