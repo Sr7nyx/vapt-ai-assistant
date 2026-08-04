@@ -395,10 +395,10 @@ def overview(user: User = Depends(get_current_user)):
     """Aggregate dashboard across ALL of the user's projects: severity/status/
     category breakdowns, risk priorities, OWASP 2025 coverage, QA verification
     flags, and usage."""
+    # Two queries, not one per project. The aggregation below costs single-digit
+    # milliseconds for hundreds of findings; the round trips were the entire cost.
     projects = store.get_projects(user.id)
-    findings = []
-    for p in projects:
-        findings.extend(store.get_findings_by_project(user.id, p["id"]))
+    findings = store.get_findings_by_user(user.id)
 
     by_severity = Counter((f.get("severity") or "Unknown") for f in findings)
     by_status = Counter((f.get("status") or "Unknown") for f in findings)

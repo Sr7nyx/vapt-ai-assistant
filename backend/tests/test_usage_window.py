@@ -55,3 +55,32 @@ class TestWindow:
         assert len(captured) == 2
         assert all("make_interval" in sql for sql, _ in captured)
         assert any("GROUP BY model" in sql for sql, _ in captured)
+
+
+class TestFindingsAggregateQuery:
+    """The dashboard reads every finding the user owns.
+
+    It previously fetched projects and then looped, issuing one query per project.
+    Round-trip latency, not the aggregation, was what made the page slow, so the
+    thing worth pinning is that it is a single owner-scoped query.
+    """
+
+    def test_reads_all_findings_in_one_query(self, monkeypatch):
+        captured = capture(monkeypatch)
+        pg_store.get_findings_by_user("u1")
+        assert len(captured) == 1, f"expected one query, issued {len(captured)}"
+
+    def test_scoped_to_the_owner(self, monkeypatch):
+        """Isolation has to survive the optimisation: the join on projects is what
+        keeps one account out of another's data."""
+        captured = capture(monkeypatch)
+        pg_store.get_findings_by_user("u1")
+        sql, params = captured[0]
+        assert "JOIN projects" in sql
+        assert "p.user_id = %s" in sql
+        assert params == ("u1",)
+
+    def test_orders_newest_first(self, monkeypatch):
+        captured = capture(monkeypatch)
+        pg_store.get_findings_by_user("u1")
+        assert "ORDER BY f.id DESC" in captured[0][0]

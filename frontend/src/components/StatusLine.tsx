@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
 import { Overview } from "@/lib/types";
+import { swr, readCache } from "@/lib/cache";
 
 /**
  * Persistent status line under the tabs.
@@ -17,18 +18,13 @@ export default function StatusLine() {
   const { data: session } = useSession();
   const token = session?.id_token;
   const path = usePathname();
-  const [data, setData] = useState<Overview | null>(null);
+  const [data, setData] = useState<Overview | null>(() => readCache<Overview>("overview") ?? null);
 
+  // Shares the dashboard's request rather than issuing a second identical one.
+  // Landing on the overview previously ran the same aggregate query twice.
   useEffect(() => {
     if (!token) return;
-    let alive = true;
-    api
-      .overview(token)
-      .then((r) => alive && setData(r))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
+    return swr<Overview>("overview", () => api.overview(token), setData);
   }, [token, path]);
 
   if (!data) return null;

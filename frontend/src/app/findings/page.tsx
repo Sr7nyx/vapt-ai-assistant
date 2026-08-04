@@ -2,6 +2,7 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { invalidate } from "@/lib/cache";
 import { useProject } from "@/lib/ProjectContext";
 import { Finding, Project } from "@/lib/types";
 import { sevClass } from "@/components/Severity";
@@ -63,9 +64,11 @@ export default function FindingsPage() {
     try {
       if (f.id) {
         await api.updateFinding(token, f.id as number, f);
+      invalidate("overview");
         notify("Finding updated", "success");
       } else if (projectId) {
         await api.createFinding(token, projectId, f);
+      invalidate("overview");
         notify("Finding added", "success");
       }
       setEditing(null);
@@ -79,6 +82,7 @@ export default function FindingsPage() {
     if (!confirm("Delete this finding?")) return;
     try {
       await api.deleteFinding(token, id);
+      invalidate("overview");
       notify("Finding deleted", "success");
       load();
     } catch (e) {
@@ -109,6 +113,7 @@ export default function FindingsPage() {
     setBulkBusy(true);
     try {
       const r = await api.bulkDeleteFindings(token, ids);
+      invalidate("overview");
       notify(`Deleted ${r.deleted} finding(s)`, "success");
       sel.clear();
       load();
@@ -297,6 +302,7 @@ export default function FindingsPage() {
           onClose={() => setRetesting(null)}
           onSubmit={async (payload) => {
             await api.retestFinding(token, retesting.id, payload);
+      invalidate("overview");
             notify(`Retest recorded (${payload.retest_status})`, "success");
             setRetesting(null);
             load();

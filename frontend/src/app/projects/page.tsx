@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { invalidate } from "@/lib/cache";
 import { useProject } from "@/lib/ProjectContext";
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
@@ -29,6 +30,7 @@ export default function ProjectsPage() {
     setCreating(true);
     try {
       const p = await api.createProject(token, form);
+      invalidate("overview");
       setForm({ name: "", client: "", scope: "" });
       setProjectId(p.id);
       notify(`Created "${p.name}"`, "success");
@@ -44,6 +46,7 @@ export default function ProjectsPage() {
     if (!confirm(`Delete project "${p.name}" and all its findings?`)) return;
     try {
       await api.deleteProject(token, p.id);
+      invalidate("overview");
       if (projectId === p.id) setProjectId(null);
       notify("Project deleted", "success");
       load();

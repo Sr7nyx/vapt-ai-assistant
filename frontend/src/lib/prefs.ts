@@ -120,6 +120,12 @@ export function buildLaneConfig(): Record<string, Record<string, unknown>> | und
 /** Clear everything sensitive this browser holds, then hand off to sign-out. */
 export function forgetSession(): void {
   clearLlmConfig();
+  // Cached aggregates belong to the account that fetched them.
+  try {
+    void import("./cache").then((m) => m.clearCache());
+  } catch {
+    // ignore
+  }
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(REMEMBER_KEY);

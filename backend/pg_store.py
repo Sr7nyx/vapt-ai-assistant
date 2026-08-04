@@ -304,6 +304,26 @@ def get_findings_by_project(user_id, project_id):
     return _all("SELECT * FROM findings WHERE project_id = %s ORDER BY id DESC", (project_id,))
 
 
+def get_findings_by_user(user_id):
+    """Every finding the user owns, in one query.
+
+    The dashboard previously fetched projects and then looped, issuing one query
+    per project. Against a pooled Postgres that is N+1 round trips where one will
+    do, and round-trip latency -- not the aggregation itself -- was what made the
+    page slow. A join on the owning project keeps the same isolation guarantee as
+    the per-project call.
+    """
+    return _all(
+        """
+        SELECT f.* FROM findings f
+        JOIN projects p ON f.project_id = p.id
+        WHERE p.user_id = %s
+        ORDER BY f.id DESC
+        """,
+        (user_id,),
+    )
+
+
 def get_finding(user_id, finding_id):
     return _one(
         """

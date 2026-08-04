@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { invalidate } from "@/lib/cache";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
 import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/prefs";
@@ -181,6 +182,7 @@ export default function AnalyzerPage() {
       for (const f of batch) {
         try {
           await api.createFinding(token, projectId, applyDefaults(f));
+      invalidate("overview");
           n++;
         } catch (e) {
           // One bad finding should not strand the rest of the batch.

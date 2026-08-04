@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { invalidate } from "@/lib/cache";
 import { useJob } from "@/hooks/useJob";
 import { useProject } from "@/lib/ProjectContext";
 import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/prefs";
@@ -156,6 +157,7 @@ export default function ImportPage() {
     setCommitting(true);
     try {
       const r = await api.commitCandidates(token, projectId, batch);
+      invalidate("overview");
       notify(`Committed ${r.committed}, skipped ${r.skipped} already present`, "success");
       sel.clear();
     } catch (e) {

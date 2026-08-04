@@ -8,6 +8,7 @@ import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList, Panel } from "@/components/Charts";
 import { SectionHeading } from "@/components/Terminal";
 import { useCountUp } from "@/hooks/useCountUp";
+import { swr, readCache } from "@/lib/cache";
 import { UsageSummary } from "@/lib/types";
 
 type Accent = "danger" | "warn" | "accent" | undefined;
@@ -16,8 +17,10 @@ type Row = { label: string; count: number };
 export default function Dashboard() {
   const { data: session } = useSession();
   const token = session?.id_token;
-  const [data, setData] = useState<Overview | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seeded from cache, so returning to this page renders populated instead of
+  // flashing a skeleton at someone who was just looking at these numbers.
+  const [data, setData] = useState<Overview | null>(() => readCache<Overview>("overview") ?? null);
+  const [loading, setLoading] = useState(() => !readCache<Overview>("overview"));
 
   // Usage is fetched separately from /overview so the window can change without
   // re-aggregating the entire dashboard.
@@ -38,8 +41,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!token) return;
-    setLoading(true);
-    api.overview(token).then(setData).catch(() => {}).finally(() => setLoading(false));
+    // No setLoading(true) here: with a cached value already rendered, flipping
+    // back to the skeleton is the flash this change exists to remove.
+    return swr<Overview>("overview", () => api.overview(token), (value) => {
+      setData(value);
+      setLoading(false);
+    });
   }, [token]);
 
   if (loading || !data) {
