@@ -203,7 +203,7 @@ export default function AnalyzerPage() {
   const skippedCount = attachments.filter((a) => a.skipped).length;
 
   return (
-    <div className="animate-in">
+    <div className="animate-in mx-auto w-full max-w-5xl">
 
       <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />

@@ -6,6 +6,7 @@ import { getLlmConfig, setLlmConfig, clearLlmConfig, getRemember, forgetSession,
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import { GithubButton, SourceFooter, GithubMark, REPO_URL } from "@/components/SourceLinks";
+import InfoHint, { LabelWithHint } from "@/components/InfoHint";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
@@ -97,23 +98,32 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="animate-in max-w-3xl">
+    <div className="animate-in mx-auto w-full max-w-3xl">
 
       <section className="card grid gap-4 mb-6">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="term-h text-muted">Model configuration</h2>
-          <p className="text-muted text-sm mt-1">
-            The pipeline uses two model lanes. Leave anything blank to fall back to the server configuration.
-          </p>
-          <p className="text-muted text-sm mt-2">
-            Each lane has its own provider quota, so pointing them at different providers roughly multiplies
-            your free-tier headroom. A common split is a fast model for extraction and a stronger reasoning
-            model on a separate provider for review.
-          </p>
+          <InfoHint label="About model configuration">
+            The pipeline uses two model lanes. Anything left blank falls back to the server configuration.
+            <span className="block mt-2">
+              Each lane has its own provider quota, so pointing them at different providers roughly
+              multiplies your free-tier headroom. A common split is a fast model for extraction and a
+              stronger reasoning model, on a separate provider, for review.
+            </span>
+          </InfoHint>
         </div>
 
         <label className="grid gap-1.5">
-          <span className="text-sm text-muted">Provider</span>
+          <span className="flex items-center gap-1.5 text-sm text-muted">
+            Provider
+            {hosts.length > 0 && (
+              <InfoHint label="About allowed providers">
+                User-supplied endpoints are restricted to an allowlist and rejected if they resolve to
+                a private or loopback address, so this field cannot be used to reach internal services.
+                <span className="block mt-2 font-mono text-[11px] break-all">{hosts.join(", ")}</span>
+              </InfoHint>
+            )}
+          </span>
           <div className="flex gap-2 flex-wrap">
             {PRESETS.map((p) => (
               <button
@@ -134,11 +144,19 @@ export default function SettingsPage() {
             value={cfg.baseUrl}
             onChange={(e) => set({ baseUrl: e.target.value })}
           />
-          {hosts.length > 0 && <span className="text-xs text-muted">Allowed provider hosts: {hosts.join(", ")}</span>}
         </label>
 
         <label className="grid gap-1.5" data-tour="api-key">
-          <span className="text-sm text-muted">Your API key</span>
+          <span className="flex items-center gap-1.5 text-sm text-muted">
+            Your API key
+            <InfoHint label="About key handling">
+              Sent with each request and used only to call your provider. It is never written to the
+              database and never leaves your browser except to your own backend.
+              <span className="block mt-2">
+                Leave it blank to use the server key, which is subject to a per-user demo quota.
+              </span>
+            </InfoHint>
+          </span>
           <input
             className="input"
             type="password"
@@ -146,10 +164,6 @@ export default function SettingsPage() {
             value={cfg.apiKey}
             onChange={(e) => set({ apiKey: e.target.value })}
           />
-          <span className="text-xs text-muted">
-            Sent with each request and used only to call your provider. It is never written to the database
-            and never leaves your browser except to your own backend.
-          </span>
         </label>
 
         <div className="rounded-lg border border-border/60 p-3 grid gap-2">
@@ -160,17 +174,23 @@ export default function SettingsPage() {
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
             />
-            <span>
+            <span className="flex items-center gap-1.5">
               Remember on this device
-              <span className="block text-xs text-muted mt-0.5">
-                Off by default: your key is kept only for this browser tab and is discarded when the tab
+              <InfoHint label="About key storage">
+                Off by default: the key is kept only for this browser tab and discarded when the tab
                 closes. Turn this on only on a device you trust and do not share.
-              </span>
+                <span className="block mt-2">
+                  Either way the configuration is tied to the signed-in account and is cleared when you
+                  sign out.
+                </span>
+              </InfoHint>
             </span>
           </label>
           <p className="text-xs text-muted">
-            Currently: <span className="text-text">{remember ? "stored on this device" : "this session only"}</span>.
-            The configuration is tied to the signed-in account and is cleared when you sign out.
+            Currently:{" "}
+            <span className={remember ? "text-warn" : "text-accent"}>
+              {remember ? "stored on this device" : "this session only"}
+            </span>
           </p>
         </div>
 
@@ -229,24 +249,37 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="card grid gap-2">
-        <h2 className="term-h text-muted">Account</h2>
-        <div className="text-sm text-muted">Signed in as {session?.user?.email}</div>
-        <button
-          className="btn-sm w-fit"
-          onClick={() => {
-            try {
-              const raw = localStorage.getItem("vapt_onboarded");
-              const seen: string[] = raw ? JSON.parse(raw) : [];
-              const owner = session?.user?.email || "";
-              localStorage.setItem("vapt_onboarded", JSON.stringify(seen.filter((o) => o !== owner)));
-            } catch {}
-            location.reload();
-          }}
-        >
-          Replay welcome tour
-        </button>
-        <div>
+      <section className="card grid gap-3">
+        <div className="flex items-center gap-1.5">
+          <h2 className="term-h text-muted">Account</h2>
+          <InfoHint label="Connection details">
+            Signed in with Google. The ID token is verified server-side on every request and all data is
+            scoped to this account.
+            <span className="block mt-2 font-mono text-[11px] break-all">
+              API: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
+            </span>
+          </InfoHint>
+        </div>
+
+        <div className="text-sm">{session?.user?.email}</div>
+
+        {/* One row: these are peers, and stacking them made the section look
+            longer than it is. */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn-sm"
+            onClick={() => {
+              try {
+                const raw = localStorage.getItem("vapt_onboarded");
+                const seen: string[] = raw ? JSON.parse(raw) : [];
+                const owner = session?.user?.email || "";
+                localStorage.setItem("vapt_onboarded", JSON.stringify(seen.filter((o) => o !== owner)));
+              } catch {}
+              location.reload();
+            }}
+          >
+            Replay tour
+          </button>
           <button
             className="btn-sm"
             onClick={() => {
@@ -257,16 +290,18 @@ export default function SettingsPage() {
             Sign out
           </button>
         </div>
-        <p className="text-xs text-muted mt-2">API: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}</p>
       </section>
 
       <section className="card grid gap-3">
-        <h2 className="term-h text-muted">About</h2>
-        <p className="text-sm text-muted">
-          An AI-assisted workspace for penetration testing, built so the model is assumed wrong until proven
-          otherwise: CVSS is computed deterministically, every finding is checked against its evidence, and a
-          second reviewer argues the false-positive case before anything reaches a report.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h2 className="term-h text-muted">About</h2>
+          <InfoHint label="About this tool">
+            An AI-assisted workspace for penetration testing, built so the model is assumed wrong until
+            proven otherwise: CVSS is computed deterministically, claims are checked against their evidence
+            in code where that is possible, and a second reviewer argues the false-positive case before
+            anything reaches a report.
+          </InfoHint>
+        </div>
 
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
           <div className="flex justify-between border-b border-border/50 pb-1">

@@ -53,7 +53,7 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="animate-in">
+    <div className="animate-in mx-auto w-full max-w-5xl">
 
       <div className="card grid gap-3 mb-6">
         <input className="input" placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
