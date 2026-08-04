@@ -168,7 +168,6 @@ export default function ImportPage() {
 
   return (
     <div className="animate-in">
-      <h1 className="text-2xl tracking-wide mb-6 caret">IMPORT SCAN</h1>
 
       <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />

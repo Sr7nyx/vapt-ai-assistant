@@ -142,6 +142,16 @@ body::after {
     .orb-float, .orb-drift { animation: none; }
   }
 
+  /* The tab strip scrolls on narrow screens; a visible scrollbar there reads as
+     an accident rather than an affordance. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .caret::after {
     content: "_";
     @apply text-highlight;
@@ -156,6 +166,16 @@ body::after {
   }
   @media (prefers-reduced-motion: reduce) {
     .orb-float, .orb-drift { animation: none; }
+  }
+
+  /* The tab strip scrolls on narrow screens; a visible scrollbar there reads as
+     an accident rather than an affordance. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   .caret::after { animation: none; }

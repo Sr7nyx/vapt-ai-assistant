@@ -66,7 +66,6 @@ export default function ReportsPage() {
   if (!projectId) {
     return (
       <div className="animate-in">
-        <h1 className="text-2xl tracking-wide mb-4 caret">REPORTS</h1>
         <div className="card text-muted text-sm">Select a project first.</div>
       </div>
     );
@@ -101,7 +100,6 @@ export default function ReportsPage() {
 
   return (
     <div className="animate-in">
-      <h1 className="text-2xl tracking-wide mb-6 caret">REPORTS</h1>
 
       <div className="card grid gap-3 mb-4">
         <textarea

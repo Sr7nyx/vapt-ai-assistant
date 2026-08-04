@@ -6,24 +6,8 @@ import { Overview } from "@/lib/types";
 import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList, Panel } from "@/components/Charts";
-import ShaderField from "@/components/ShaderField";
-import { StatStrip, Stat, Sep, SectionHeading } from "@/components/Terminal";
+import { SectionHeading } from "@/components/Terminal";
 import { UsageSummary } from "@/lib/types";
-
-function OverviewHeader() {
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-border/60 px-6 py-8 mb-8">
-      {/* A whisper of the landing shader: static, very faint, header only. */}
-      <ShaderField intensity={0.11} animate={false} seed={8} />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-transparent" />
-      <div className="relative z-10">
-        <div className="text-xs text-muted tracking-widest mb-1">VAPT CONSOLE</div>
-        <h1 className="text-2xl tracking-wide caret">OVERVIEW</h1>
-        <p className="text-muted text-sm mt-1">Aggregated across all of your projects.</p>
-      </div>
-    </section>
-  );
-}
 
 type Accent = "danger" | "warn" | "accent" | undefined;
 type Row = { label: string; count: number };
@@ -60,7 +44,6 @@ export default function Dashboard() {
   if (loading || !data) {
     return (
       <div className="animate-in">
-        <OverviewHeader />
         <Skeleton rows={6} />
       </div>
     );
@@ -71,20 +54,6 @@ export default function Dashboard() {
   return (
     <div className="animate-in space-y-10">
       <section>
-        <OverviewHeader />
-        <div className="mb-4">
-          <StatStrip>
-            <Stat label="PROJECTS" value={data.projects} />
-            <Sep />
-            <Stat label="FINDINGS" value={data.findings} />
-            <Sep />
-            <Stat label="CRIT/HIGH" value={data.critical + data.high} tone={data.critical + data.high > 0 ? "danger" : undefined} />
-            <Sep />
-            <Stat label="FLAGGED" value={data.qa_flags} tone={data.qa_flags > 0 ? "warn" : undefined} />
-            <Sep />
-            <Stat label="LLM CALLS" value={u.calls} />
-          </StatStrip>
-        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
           <Metric label="Active projects" value={data.projects} />
           <Metric label="Aggregated findings" value={data.findings} />

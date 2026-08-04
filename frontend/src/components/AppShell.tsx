@@ -2,7 +2,8 @@
 import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useCallback, useEffect } from "react";
-import Nav from "./Nav";
+import TopNav from "./TopNav";
+import StatusLine from "./StatusLine";
 import SignInGate from "./SignInGate";
 import { Spinner } from "./Loading";
 import { bindSessionOwner, forgetSession } from "@/lib/prefs";
@@ -66,11 +67,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return <SignInGate />;
   }
   return (
-    <div className="flex min-h-screen">
-      <Nav />
-      <main className="flex-1 min-w-0 px-6 py-10">
-        <div className="mx-auto w-full max-w-5xl">{children}</div>
-      </main>
+    <div className="min-h-screen flex flex-col">
+      <TopNav onSignOut={endSession} />
+      <StatusLine />
+      {/* Full-bleed. A centred max-width column is the shape of a marketing page,
+          not a console: finding tables and evidence panes need the width, and
+          capping it at 1024px is what makes an application look templated. The
+          cap here is generous and exists only to stop line lengths becoming
+          unreadable on ultrawide displays. */}
+      <main className="flex-1 min-w-0 w-full max-w-[1800px] px-4 py-5">{children}</main>
       <Onboarding />
       {secondsLeft !== null && (
         <IdleWarning
