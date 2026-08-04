@@ -32,6 +32,9 @@ export interface Job {
   status: string;
   progress: number;
   stage: string;
+  /** Every stage message in order. Accumulated server-side, because stages can
+   *  pass faster than the client polls. */
+  log?: string[];
   result?: unknown;
   error?: string;
   done: boolean;

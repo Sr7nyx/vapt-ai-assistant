@@ -1010,10 +1010,26 @@ def _review_findings(findings, raw_input, default_key, usage_sink=None, progress
             done += 1
             if progress_cb:
                 try:
-                    progress_cb(0.5 + 0.45 * (done - 1) / total, f"Reviewing finding {done}/{total}\u2026")
+                    progress_cb(
+                        0.5 + 0.45 * (done - 1) / total,
+                        f"Reviewing {done}/{total}: {str(finding.get('title',''))[:52]}",
+                    )
                 except Exception:
                     pass
             findings[i] = _run_skeptical_review(review_client, models, finding, raw_input, usage_sink=usage_sink)
+            if progress_cb:
+                try:
+                    verdict = re.search(
+                        r'verdict:\s*"([^"]+)"',
+                        str(findings[i].get("additional_remarks", "")),
+                    )
+                    if verdict:
+                        progress_cb(
+                            0.5 + 0.45 * done / total,
+                            f"  -> {verdict.group(1)}",
+                        )
+                except Exception:
+                    pass
         else:
             _append_remark(
                 finding,
@@ -1082,7 +1098,7 @@ def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None):
     for i, candidate in enumerate(candidates):
         if i in to_triage:
             done += 1
-            _progress(0.05 + 0.9 * (done - 1) / total, f"Triaging finding {done}/{total}\u2026")
+            _progress(0.05 + 0.9 * (done - 1) / total, f"Triaging {done}/{total}: {str(candidate.get('title',''))[:52]}")
             material = str(candidate.get("evidence") or "").strip() or str(candidate.get("description") or "").strip()
             candidates[i] = _run_skeptical_review(review_client, models, candidate, material, usage_sink=usage_sink)
         elif candidate.get("noise"):
@@ -1163,6 +1179,11 @@ def analyze_vapt_data(api_key: str, analysis_type: str, raw_input: str, usage_si
         result = verifiers.verify_finding(f, raw_input)
         if result:
             f["_verification"] = result
+            # Surface the outcome as its own progress line. A refutation is the
+            # most informative thing the pipeline produces, and burying it until
+            # the run finishes wastes the moment it happens.
+            if result["status"] != verifiers.INSUFFICIENT:
+                _progress(0.45, f"[{result['status']}] {str(f.get('title',''))[:60]}")
             f["additional_remarks"] = _append_remark(
                 {"additional_remarks": f.get("additional_remarks", "")},
                 f"- Deterministic check: {result['status']}. {result['summary']}",

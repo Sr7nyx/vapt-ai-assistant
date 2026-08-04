@@ -9,6 +9,7 @@ import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
+import JobLog from "@/components/JobLog";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
 import { useSelection } from "@/hooks/useSelection";
@@ -323,6 +324,7 @@ export default function AnalyzerPage() {
       </div>
 
       <JobProgress job={job} />
+      <JobLog job={job} />
 
       {results.length > 0 && (
         <div className="grid gap-3">

@@ -211,6 +211,11 @@ def _new_job(user_id: str) -> str:
         _jobs[jid] = {
             "id": jid, "user_id": user_id, "status": "running", "progress": 0.0,
             "stage": "Starting", "result": None, "error": None, "done": False,
+            # Every stage message, in order. The client polls about once a second
+            # while stages can pass in milliseconds, so keeping only the latest
+            # would drop most of the run. Bounded so a long job cannot grow it
+            # without limit.
+            "log": [],
         }
     return jid
 
@@ -630,7 +635,12 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
 
         def cb(fraction, message):
             job["progress"] = max(0.0, min(1.0, float(fraction)))
-            job["stage"] = str(message)
+            text = str(message)
+            job["stage"] = text
+            log = job["log"]
+            if not log or log[-1] != text:      # collapse repeats
+                log.append(text)
+                del log[:-400]
 
         # Lane overrides are thread-local, so this job's provider/model choice
         # cannot bleed into any other user's concurrent job.
@@ -728,7 +738,12 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
 
         def cb(fraction, message):
             job["progress"] = max(0.0, min(1.0, float(fraction)))
-            job["stage"] = str(message)
+            text = str(message)
+            job["stage"] = text
+            log = job["log"]
+            if not log or log[-1] != text:      # collapse repeats
+                log.append(text)
+                del log[:-400]
 
         with gemini_client.lane_config(lanes):
             result = gemini_client.triage_findings(api_key, candidates, usage_sink=usage_records, progress_cb=cb)

@@ -8,6 +8,7 @@ import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/pr
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import JobProgress from "@/components/JobProgress";
+import JobLog from "@/components/JobLog";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
 import { verdictOf, sevClass } from "@/components/Severity";
@@ -263,6 +264,8 @@ export default function ImportPage() {
           </SelectionBar>
 
           <JobProgress job={job} />
+          <JobLog job={job} />
+      <JobLog job={job} />
 
           <div className="card overflow-x-auto p-0">
             <table className="w-full text-sm">
