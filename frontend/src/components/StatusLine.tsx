@@ -31,7 +31,8 @@ export default function StatusLine() {
   const critHigh = data.critical + data.high;
 
   return (
-    <div className="flex items-center gap-x-4 gap-y-1 flex-wrap px-4 py-1.5 text-[11px] tracking-wide border-b border-border/60 bg-surface/40">
+    <div className="border-b border-border/60 bg-surface/40">
+      <div className="app-col flex items-center gap-x-4 gap-y-1 flex-wrap py-1.5 text-[11px] tracking-wide">
       <Cell label="PROJECTS" value={data.projects} />
       <Sep />
       <Cell label="FINDINGS" value={data.findings} />
@@ -46,6 +47,7 @@ export default function StatusLine() {
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent" />
         CONNECTED
       </span>
+      </div>
     </div>
   );
 }

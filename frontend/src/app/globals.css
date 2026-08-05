@@ -172,6 +172,13 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   /* A panel, not a marketing card. Tight radius and modest padding: the generous
      rounded box with airy padding is the shape of a landing page, and repeating it
      for every group is what makes an interface read as templated. */
+  /* One column for the whole application: chrome and content share it, so the
+     status line's right edge lines up with the content's right edge instead of
+     running to the window edge while the content stops short. */
+  .app-col {
+    @apply w-full max-w-[1800px] mx-auto px-4;
+  }
+
   .card {
     @apply bg-surface/60 border border-border rounded-lg p-3.5 transition-all;
   }

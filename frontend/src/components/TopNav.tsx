@@ -93,7 +93,8 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur border-b border-border">
       {/* Command row: identity, working context, session. */}
-      <div className="flex items-center gap-4 px-4 h-11 border-b border-border/60">
+      <div className="border-b border-border/60">
+        <div className="app-col flex items-center gap-4 h-11">
         <Link href="/" className="text-sm tracking-wide shrink-0 hover:opacity-80 transition-opacity">
           <span className="text-highlight">&gt;</span> vapt<span className="text-accent">.</span>console
         </Link>
@@ -138,11 +139,12 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
         >
           [LOG OUT]
         </button>
+        </div>
       </div>
 
       {/* Tab strip. Scrolls horizontally rather than wrapping, so the chrome
           height never changes as the window narrows. */}
-      <nav ref={stripRef} className="relative flex items-stretch overflow-x-auto no-scrollbar">
+      <nav ref={stripRef} className="app-col relative flex items-stretch overflow-x-auto no-scrollbar !px-1">
         {bar && (
           <span
             aria-hidden="true"

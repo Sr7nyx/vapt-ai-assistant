@@ -85,7 +85,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           unreadable on ultrawide displays. */}
       {/* Keyed on the route so each navigation replays the entrance. Without the
           key React reuses the node and the transition only ever runs once. */}
-      <main key={pathname} className="route-in flex-1 min-w-0 w-full max-w-[1800px] px-4 py-5">
+      <main key={pathname} className="route-in app-col flex-1 min-w-0 py-5">
         {children}
       </main>
       <Onboarding />
