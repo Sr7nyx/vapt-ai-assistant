@@ -13,6 +13,7 @@ import JobProgress from "@/components/JobProgress";
 import JobLog from "@/components/JobLog";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
+import ScanOverlay from "@/components/ScanOverlay";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
 import FindingEditor from "@/components/FindingEditor";
@@ -209,7 +210,11 @@ export default function AnalyzerPage() {
   return (
     <div className="animate-in mx-auto w-full max-w-5xl">
 
-      <LaneStatus />
+      {/* Extraction runs below 0.5, the reviewer above it -- the same split the
+          pipeline reports through progress. */}
+      <LaneStatus
+        activeLane={running ? ((job?.progress ?? 0) < 0.5 ? "MAIN" : "REVIEW") : null}
+      />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
       <Section title="Input">
@@ -293,12 +298,18 @@ export default function AnalyzerPage() {
         </Field>
 
         <Field label="Evidence / raw input">
-          <textarea
-            className="input min-h-48 font-mono text-xs"
-            placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
+          {/* The overlay sits on the evidence itself, because that is what the
+              pipeline is reading. A spinner elsewhere would say only "wait". */}
+          <div className="relative">
+            <textarea
+              className="input min-h-48 font-mono text-xs"
+              placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              readOnly={running}
+            />
+            <ScanOverlay active={running} progress={job?.progress ?? 0} done={!!job?.done} />
+          </div>
           {guard && !guard.ok && (
             <p className="text-xs text-warn mt-2 border border-warn/40 rounded-lg px-3 py-2">
               {guard.reason}
@@ -318,7 +329,12 @@ export default function AnalyzerPage() {
           <button className="btn" onClick={run} disabled={running || (guard ? !guard.ok : false)}>
             {running ? (
               <span className="flex items-center gap-2">
-                <Spinner /> Analyzing
+                <Spinner />
+                {(job?.progress ?? 0) < 0.4
+                  ? "Extracting"
+                  : (job?.progress ?? 0) < 0.5
+                  ? "Verifying"
+                  : "Reviewing"}
               </span>
             ) : (
               "Run analysis"

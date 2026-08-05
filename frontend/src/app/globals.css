@@ -120,6 +120,14 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+@keyframes scanSweep {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(calc(100% + 12rem)); }
+}
+@keyframes pulseRing {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
 @keyframes blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
@@ -229,6 +237,19 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   @media (prefers-reduced-motion: reduce) {
     html[data-motion="system"] .route-in,
     html[data-motion="system"] .grow-x { animation: none; }
+  }
+
+  .scan-sweep {
+    animation: scanSweep 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .pulse-ring {
+    animation: pulseRing 1.6s ease-in-out infinite;
+  }
+  html[data-motion="reduced"] .scan-sweep,
+  html[data-motion="reduced"] .pulse-ring { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-motion="system"] .scan-sweep,
+    html[data-motion="system"] .pulse-ring { animation: none; }
   }
 
   .caret::after {

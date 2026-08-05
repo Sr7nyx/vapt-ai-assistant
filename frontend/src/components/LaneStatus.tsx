@@ -13,7 +13,7 @@ const LANES: { key: string; label: string; hint: string }[] = [
   { key: "REVIEW", label: "Reviewer", hint: "Audits each finding against its evidence" },
 ];
 
-export default function LaneStatus() {
+export default function LaneStatus({ activeLane }: { activeLane?: "MAIN" | "REVIEW" | null } = {}) {
   const { data: session } = useSession();
   const token = session?.id_token;
   const [lanes, setLanes] = useState<Record<string, LaneInfo> | null>(null);
@@ -72,9 +72,23 @@ export default function LaneStatus() {
           {LANES.map(({ key, label }) => {
             const info = lanes[key];
             if (!info) return null;
+            // Which lane is doing the work right now. Derived from the job's own
+            // progress, so it is a report rather than an animation: the reviewer
+            // genuinely is the expensive half, and seeing it light up explains
+            // where the time is going.
+            const working = activeLane === key;
             return (
-              <span key={key} className="flex items-center gap-1.5 min-w-0">
-                <Dot state={health[key] || "unknown"} />
+              <span
+                key={key}
+                className={`flex items-center gap-1.5 min-w-0 rounded px-1.5 -mx-1.5 transition-colors ${
+                  working ? "bg-highlight/10" : ""
+                }`}
+              >
+                {working ? (
+                  <span className="pulse-ring inline-block w-2 h-2 rounded-full bg-highlight shrink-0" />
+                ) : (
+                  <Dot state={health[key] || "unknown"} />
+                )}
                 <span className="text-muted">{label}</span>
                 <span className="font-mono text-xs truncate">{info.model || "not set"}</span>
                 <span className="text-muted text-xs">on {info.provider}</span>

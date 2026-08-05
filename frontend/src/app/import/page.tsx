@@ -63,6 +63,7 @@ export default function ImportPage() {
   const [quotaTick, setQuotaTick] = useState(0);
   const handled = useRef<string | null>(null);
   const job = useJob(token, jobId);
+  const running = !!job && !job.done;
 
   useEffect(() => {
     const id = getActiveJob("triage");
@@ -173,7 +174,7 @@ export default function ImportPage() {
   return (
     <div className="animate-in">
 
-      <LaneStatus />
+      <LaneStatus activeLane={running ? "REVIEW" : null} />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
       <Section title="Source">
