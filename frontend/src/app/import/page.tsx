@@ -335,6 +335,10 @@ export default function ImportPage() {
       )}
 
       {limitMsg && <DemoLimitModal message={limitMsg} onClose={() => setLimitMsg(null)} />}
+
+      {/* At the component root: an overlay nested in a conditional branch
+          unmounts when that branch does, which would take the panel down mid-run. */}
+      <JobConsole job={job} title="Triage" resultCount={effective.length} />
     </div>
   );
 }
@@ -353,10 +357,6 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div className="card">
       <div className="text-muted text-sm">{label}</div>
       <div className="text-2xl font-semibold mt-1">{value}</div>
-
-      {/* At the root: an overlay must not live inside a branch that can unmount
-          while its job is still running. */}
-      <JobConsole job={job} title="Triage" resultCount={effective.length} />
     </div>
   );
 }
