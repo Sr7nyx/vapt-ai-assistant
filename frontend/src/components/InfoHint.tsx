@@ -65,7 +65,7 @@ export default function InfoHint({
           id={id}
           role="tooltip"
           onMouseLeave={() => setOpen(false)}
-          className={`absolute top-6 z-30 w-72 rounded-lg border border-border bg-surface p-3 text-xs leading-relaxed text-muted shadow-2xl ${
+          className={`absolute top-6 z-30 w-72 glass rounded-lg p-3 text-xs leading-relaxed text-muted ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

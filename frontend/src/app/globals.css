@@ -174,6 +174,46 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     max-width: 78ch;
   }
 
+  /* Glass means ELEVATION, and only elevation.
+   *
+   * Frosted depth and flat terminal density are opposed aesthetics, and applying
+   * glass everywhere produces neither. The rule that makes them coexist is the one
+   * Apple uses: glass is for surfaces that FLOAT above content -- sheets, palettes,
+   * popovers, toasts -- never for the content itself. A findings table rendered on
+   * frosted glass is harder to read for no gain; a command palette on it reads
+   * instantly as "this is above the page".
+   *
+   * So: page content stays flat and dense. Anything that hovers gets .glass.
+   */
+  .glass {
+    background: rgba(26, 37, 30, 0.72);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid rgba(var(--phosphor), 0.14);
+    /* The hairline along the top edge is what actually sells glass: it reads as
+       light catching a bevel. Without it, translucency alone just looks faded. */
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 24px 60px -20px rgba(0, 0, 0, 0.75);
+  }
+
+  /* Backdrop blur is not universal, and without it the panel is merely
+     semi-transparent, which is unreadable over dense text. Fall back to opaque. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: #1a251e;
+    }
+  }
+
+  /* A dimmer for whatever the glass floats over. Paired with .glass so the two
+     always agree about how much of the page shows through. */
+  .glass-scrim {
+    background: rgba(4, 8, 6, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
   .card {
     @apply bg-surface/60 border border-border rounded-lg p-3.5 transition-all;
   }
@@ -336,22 +376,21 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     @apply bg-white/5 rounded-lg animate-pulse;
   }
   .modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background: rgba(0, 0, 0, 0.72);
-    backdrop-filter: blur(2px);
+    @apply glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4;
     animation: fadeIn 0.15s ease-out;
   }
   .modal-panel {
-    @apply bg-surface border border-border rounded-2xl p-5 w-full max-w-2xl shadow-2xl;
+    @apply glass rounded-2xl p-5 w-full max-w-2xl;
     animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .toast {
-    @apply px-4 py-3 rounded-xl text-sm border bg-surface shadow-2xl;
+    @apply glass px-4 py-3 rounded-xl text-sm;
     animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .toast-success { @apply border-accent; }
-  .toast-error { @apply border-danger; }
-  .toast-info { @apply border-border; }
+  /* These must override .glass's own border, hence the explicit colour. */
+  .toast-success { border-color: rgba(126, 231, 135, 0.55); }
+  .toast-error { border-color: rgba(255, 107, 107, 0.55); }
+  .toast-info { border-color: rgba(37, 51, 42, 0.9); }
 
   /* Long-form finding text stays readable: monospace is right for chrome, data
      and evidence, but punishing for paragraphs of prose. */

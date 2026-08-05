@@ -190,11 +190,11 @@ export default function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center px-4 pt-[12vh]"
-      style={{ background: "rgba(0,0,0,0.72)" }}
+      className="glass-scrim fixed inset-0 z-[80] flex items-start justify-center px-4 pt-[12vh]"
+      
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
-      <div className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-2xl overflow-hidden animate-in">
+      <div className="glass w-full max-w-xl rounded-xl overflow-hidden animate-in">
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/60">
           <span className="text-highlight select-none">&gt;</span>
           <input
@@ -211,7 +211,7 @@ export default function CommandPalette() {
           </kbd>
         </div>
 
-        <div ref={listRef} className="max-h-[52vh] overflow-y-auto py-1">
+        <div ref={listRef} className="pane-scroll max-h-[52vh] overflow-y-auto py-1">
           {results.length === 0 && (
             <p className="px-4 py-6 text-center text-xs text-muted">No matching command.</p>
           )}

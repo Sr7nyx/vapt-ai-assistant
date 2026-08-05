@@ -18,7 +18,7 @@ export default function SignInGate() {
       <ShaderField />
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(1100px 620px at 50% 38%, transparent, rgba(15,18,22,0.88))" }}
+        style={{ background: "radial-gradient(1200px 700px at 50% 38%, transparent, rgba(10,14,12,0.9))" }}
       />
 
       <div className="relative z-10 min-h-screen w-full flex items-center justify-center p-6">
@@ -27,15 +27,20 @@ export default function SignInGate() {
             <div className="text-2xl mb-5 tracking-wide">
               <span className="text-highlight">&gt;</span> vapt<span className="text-accent">.</span>console
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold leading-tight mb-4">
+            <h1 className="text-3xl sm:text-4xl leading-tight mb-4 measure">
               AI-assisted vulnerability assessment, <span className="text-accent">with guardrails.</span>
             </h1>
-            <p className="text-muted mb-6 leading-relaxed">
+            <p className="text-muted mb-6 leading-relaxed measure">
               A penetration tester's workspace that takes an engagement from raw evidence and scanner output, through
               triage, to a client-ready report — without trusting the AI blindly. Every finding is scored
               deterministically, grounded against its own evidence, and challenged by a skeptical reviewer before it
               reaches a report.
             </p>
+            <div className="flex items-baseline gap-3 border-b border-border pb-1.5 mb-4">
+              <h2 className="text-[11px] tracking-widest text-muted">
+                <span className="text-accent">&gt;</span> WHAT IT DOES
+              </h2>
+            </div>
             <ul className="grid gap-3 mb-8">
               {FEATURES.map((t, i) => (
                 <li key={i} className="flex gap-3 text-sm">
@@ -46,7 +51,7 @@ export default function SignInGate() {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted measure">
               For authorized security testing only. This is a demo — use synthetic data, not real client data.
             </p>
             <SourceFooter className="mt-5" />
@@ -60,8 +65,10 @@ export default function SignInGate() {
               </p>
             </div>
 
-            <div className="card p-8 shadow-2xl bg-surface/70 backdrop-blur-md">
-              <h2 className="text-lg tracking-wide mb-1">GET STARTED</h2>
+            <div className="glass rounded-xl p-8">
+              <h2 className="text-[11px] tracking-widest text-muted mb-3">
+                <span className="text-accent">&gt;</span> GET STARTED
+              </h2>
               <p className="text-muted text-sm mb-6">
                 Sign in to create a project and start analyzing. Your projects and findings are private to your
                 account.

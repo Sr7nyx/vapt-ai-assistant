@@ -89,7 +89,7 @@ export default function JobConsole({
     return (
       <button
         onClick={() => setMinimised(false)}
-        className="fixed bottom-4 right-4 z-[70] flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-2xl hover:border-accent/60 transition-colors"
+        className="glass fixed bottom-4 right-4 z-[70] flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs hover:border-accent/60 transition-colors"
       >
         {!done && (
           <span className="pulse-ring inline-block w-1.5 h-1.5 rounded-full bg-highlight shrink-0" />
@@ -106,15 +106,15 @@ export default function JobConsole({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.6)" }}
+      className="glass-scrim fixed inset-0 z-[70] flex items-center justify-center p-4"
+      
       onMouseDown={(e) => e.target === e.currentTarget && setMinimised(true)}
     >
       <div
         role="dialog"
         aria-modal="false"
         aria-label={`${title} progress`}
-        className="w-full max-w-2xl rounded-xl border border-border bg-surface shadow-2xl overflow-hidden animate-in"
+        className="glass w-full max-w-2xl rounded-xl overflow-hidden animate-in"
       >
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/60">
           <span className="text-[10px] tracking-widest text-muted">{title.toUpperCase()}</span>
