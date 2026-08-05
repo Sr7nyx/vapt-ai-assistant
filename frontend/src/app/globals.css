@@ -88,14 +88,6 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
-@keyframes orbFloat {
-  0%, 100% { transform: translateY(-7px); }
-  50% { transform: translateY(7px); }
-}
-@keyframes orbDrift {
-  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); opacity: 0.18; }
-  50% { transform: translateY(-14px) rotate(var(--rot, 0deg)); opacity: 0.4; }
-}
 @keyframes routeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
@@ -126,6 +118,10 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   0%   { opacity: 0.95; }
   50%  { opacity: 0.14; }
   100% { opacity: 0.95; }
+}
+@keyframes floatIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes blink {
   0%, 49% { opacity: 1; }
@@ -256,18 +252,6 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     @apply text-border select-none;
   }
 
-  .orb-float {
-    animation: orbFloat 7.5s ease-in-out infinite;
-  }
-  .orb-drift {
-    animation: orbDrift 13s ease-in-out infinite;
-  }
-  html[data-motion="reduced"] .orb-float,
-  html[data-motion="reduced"] .orb-drift { animation: none; }
-  @media (prefers-reduced-motion: reduce) {
-    html[data-motion="system"] .orb-float,
-    html[data-motion="system"] .orb-drift { animation: none; }
-  }
 
   /* The tab strip scrolls on narrow screens; a visible scrollbar there reads as
      an accident rather than an affordance. */
@@ -334,6 +318,17 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     html[data-motion="system"] .orbit-fade { animation: none; }
   }
 
+  /* Entrance for content that should arrive rather than appear. backwards fill so
+     a delayed element is hidden until its turn instead of flashing first. */
+  .float-in {
+    opacity: 0;
+    animation: floatIn 0.62s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  html[data-motion="reduced"] .float-in { animation: none; opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-motion="system"] .float-in { animation: none; opacity: 1; }
+  }
+
   .caret::after {
     content: "_";
     @apply text-highlight;
@@ -344,18 +339,6 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     html[data-motion="system"] .caret::after { animation: none; }
   }
 
-  .orb-float {
-    animation: orbFloat 7.5s ease-in-out infinite;
-  }
-  .orb-drift {
-    animation: orbDrift 13s ease-in-out infinite;
-  }
-  html[data-motion="reduced"] .orb-float,
-  html[data-motion="reduced"] .orb-drift { animation: none; }
-  @media (prefers-reduced-motion: reduce) {
-    html[data-motion="system"] .orb-float,
-    html[data-motion="system"] .orb-drift { animation: none; }
-  }
 
   /* The tab strip scrolls on narrow screens; a visible scrollbar there reads as
      an accident rather than an affordance. */

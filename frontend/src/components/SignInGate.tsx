@@ -1,8 +1,8 @@
 "use client";
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
-import AsciiOrb from "./AsciiOrb";
-import OrbitWords from "./OrbitWords";
+import ShaderOrb from "./ShaderOrb";
+import OrbitRings from "./OrbitRings";
 import { GithubButton, SourceFooter } from "./SourceLinks";
 
 /**
@@ -43,12 +43,6 @@ const GUARDRAILS: { title: string; body: string }[] = [
   },
 ];
 
-const STATS: { value: string; label: string }[] = [
-  { value: "281", label: "offline tests" },
-  { value: "100%", label: "precision on the labelled set" },
-  { value: "0", label: "real findings dismissed" },
-];
-
 export default function SignInGate() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
@@ -70,32 +64,24 @@ export default function SignInGate() {
           <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-x-16 gap-y-12 items-start">
             {/* The argument */}
             <div className="animate-in">
-              <h1 className="text-3xl sm:text-5xl leading-[1.1] mb-5 measure">
+              <h1 className="float-in text-3xl sm:text-5xl leading-[1.1] mb-5 measure" style={{ animationDelay: "40ms" }}>
                 An AI pentest workspace that assumes the AI is{" "}
                 <span className="text-accent">wrong until the evidence says otherwise.</span>
               </h1>
-              <p className="text-muted leading-relaxed mb-8 measure">
+              <p className="float-in text-muted leading-relaxed mb-8 measure" style={{ animationDelay: "120ms" }}>
                 Takes an engagement from raw evidence and scanner output, through triage, to a
                 client-ready report. The models draft; deterministic checks decide.
               </p>
 
-              <div className="flex flex-wrap gap-x-10 gap-y-3 mb-10">
-                {STATS.map((s) => (
-                  <div key={s.label}>
-                    <div className="text-2xl text-accent tabular-nums">{s.value}</div>
-                    <div className="text-[10px] tracking-widest text-muted">{s.label.toUpperCase()}</div>
-                  </div>
-                ))}
-              </div>
 
-              <div className="flex items-baseline gap-3 border-b border-border pb-1.5 mb-5">
+              <div className="float-in flex items-baseline gap-3 border-b border-border pb-1.5 mb-5" style={{ animationDelay: "180ms" }}>
                 <h2 className="text-[11px] tracking-widest text-muted">
                   <span className="text-accent">&gt;</span> HOW IT KEEPS THE MODEL HONEST
                 </h2>
               </div>
               <ol className="grid sm:grid-cols-2 gap-x-8 gap-y-5">
                 {GUARDRAILS.map((g, i) => (
-                  <li key={i} className="grid gap-1">
+                  <li key={i} className="float-in grid gap-1" style={{ animationDelay: `${140 + i * 90}ms` }}>
                     <div className="flex items-baseline gap-2">
                       <span className="text-[10px] text-border tabular-nums shrink-0">
                         {String(i + 1).padStart(2, "0")}
@@ -116,9 +102,9 @@ export default function SignInGate() {
                   crossing the body or bleeding out of the column. */}
               <div className="relative mb-10 py-4">
                 <div className="relative">
-                  <OrbitWords />
-                  <div className="mx-auto w-[68%]">
-                    <AsciiOrb />
+                  <OrbitRings />
+                  <div className="mx-auto w-[62%]">
+                    <ShaderOrb />
                   </div>
                 </div>
                 <p className="text-center text-[10px] tracking-widest text-muted/60 mt-6">
