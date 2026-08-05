@@ -179,6 +179,12 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     @apply w-full max-w-[1800px] mx-auto px-4;
   }
 
+  /* Long-form text stays readable regardless of how wide the window is. Data can
+     fill the space; a paragraph spanning 2000px cannot be read. */
+  .measure {
+    max-width: 78ch;
+  }
+
   .card {
     @apply bg-surface/60 border border-border rounded-lg p-3.5 transition-all;
   }

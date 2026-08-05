@@ -72,7 +72,7 @@ export default function Dashboard() {
   return (
     <div className="animate-in grid gap-8">
       {data.qa_flags > 0 && (
-        <p className="border-l-2 border-warn/70 pl-3 py-1 text-sm text-warn">
+        <p className="measure border-l-2 border-warn/70 pl-3 py-1 text-sm text-warn">
           {data.qa_flags} finding{data.qa_flags === 1 ? "" : "s"} carry verification flags &mdash;
           unverified evidence, severity disagreement, or prompt injection. Review before reporting.
         </p>
@@ -107,10 +107,10 @@ export default function Dashboard() {
       </Section>
 
       <Section title="Breakdown">
-        <div className="grid lg:grid-cols-3 gap-x-10 gap-y-6">
+        <div className="flex flex-wrap gap-x-14 gap-y-8">
           <Table col="Status" rows={data.by_status} />
-          <Table col="Category" rows={data.by_category} />
           <Table col="Severity" rows={data.by_severity} colorSeverity />
+          <Table col="Category" rows={data.by_category} />
         </div>
       </Section>
 
@@ -119,9 +119,11 @@ export default function Dashboard() {
         note="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
       >
         <div className="grid lg:grid-cols-2 gap-x-10 gap-y-4">
-          <BarList rows={mapped} />
+          <div className="max-w-2xl">
+            <BarList rows={mapped} />
+          </div>
           {unmapped && (
-            <p className="text-xs text-muted self-start">
+            <p className="measure text-xs text-muted self-start">
               <span className="text-text">{unmapped.count}</span> finding
               {unmapped.count === 1 ? "" : "s"} could not be mapped from the available signal and are
               left for manual assignment. That is deliberate: a guessed framework category is worse
@@ -159,7 +161,7 @@ export default function Dashboard() {
         </div>
 
         {u.by_model?.length > 0 && (
-          <table className="w-full text-sm max-w-2xl">
+          <table className="w-full text-sm max-w-xl">
             <thead className="text-muted text-left border-b border-border">
               <tr>
                 <th className="font-normal text-xs pb-1.5">Model</th>
@@ -193,9 +195,13 @@ function Table({
   rows: Row[];
   colorSeverity?: boolean;
 }) {
+  // Category labels are full sentences ("Web Application/API Vulnerability");
+  // status and severity are single words. Sizing them identically would either
+  // wrap the long one or strand the short ones.
+  const width = col === "Category" ? "min-w-[22rem]" : "min-w-[15rem]";
   if (rows.length === 0) {
     return (
-      <div>
+      <div className={width}>
         <div className="text-[10px] tracking-widest text-muted mb-2">{col.toUpperCase()}</div>
         <p className="text-xs text-muted">Nothing yet.</p>
       </div>
@@ -205,7 +211,7 @@ function Table({
   return (
     <div>
       <div className="text-[10px] tracking-widest text-muted mb-2">{col.toUpperCase()}</div>
-      <table className="w-full text-sm">
+      <table className={`w-full max-w-sm text-sm ${width}`}>
         <tbody>
           {rows.map((r) => (
             <tr key={r.label} className="border-b border-border/40 last:border-0">
