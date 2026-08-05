@@ -2,28 +2,35 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
-import { Overview } from "@/lib/types";
+import { Overview, UsageSummary } from "@/lib/types";
 import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
-import { SeverityBar, BarList, Panel } from "@/components/Charts";
-import { SectionHeading } from "@/components/Terminal";
-import { useCountUp } from "@/hooks/useCountUp";
+import { SeverityBar, BarList } from "@/components/Charts";
 import { swr, readCache } from "@/lib/cache";
-import { UsageSummary } from "@/lib/types";
 
-type Accent = "danger" | "warn" | "accent" | undefined;
+/**
+ * Overview.
+ *
+ * Rewritten around a rule the previous version broke: show each fact once. The
+ * total finding count appeared in the persistent status line, again as a large
+ * metric card, again in the severity bar, and again in the severity table --
+ * four renderings of one number. Showing every possible view of the data is what
+ * makes a page read as generated rather than designed, and no amount of styling
+ * fixes it.
+ *
+ * So the metric cards are gone: the status line above already carries projects,
+ * findings, critical/high, flagged and tokens, and it is on every page. What is
+ * left here is what the status line cannot show -- distributions, coverage, and
+ * where the risk actually sits.
+ */
+
 type Row = { label: string; count: number };
 
 export default function Dashboard() {
   const { data: session } = useSession();
   const token = session?.id_token;
-  // Seeded from cache, so returning to this page renders populated instead of
-  // flashing a skeleton at someone who was just looking at these numbers.
   const [data, setData] = useState<Overview | null>(() => readCache<Overview>("overview") ?? null);
   const [loading, setLoading] = useState(() => !readCache<Overview>("overview"));
-
-  // Usage is fetched separately from /overview so the window can change without
-  // re-aggregating the entire dashboard.
   const [usageWindow, setUsageWindow] = useState("all");
   const [usage, setUsage] = useState<UsageSummary | null>(null);
 
@@ -41,8 +48,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!token) return;
-    // No setLoading(true) here: with a cached value already rendered, flipping
-    // back to the skeleton is the flash this change exists to remove.
     return swr<Overview>("overview", () => api.overview(token), (value) => {
       setData(value);
       setLoading(false);
@@ -58,174 +63,208 @@ export default function Dashboard() {
   }
 
   const u = usage ?? data.usage;
+  const risk = data.risk_priorities || {};
+  const mapped = data.owasp_coverage.filter((r) => r.label !== "Unmapped (assign manually)");
+  const unmapped = data.owasp_coverage.find((r) => r.label === "Unmapped (assign manually)");
 
   return (
-    <div className="animate-in space-y-10">
-      <section>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-          <Metric label="Active projects" value={data.projects} />
-          <Metric label="Aggregated findings" value={data.findings} />
-          <Metric label="Critical" value={data.critical} accent="danger" />
-          <Metric label="High" value={data.high} accent="warn" />
-        </div>
-      </section>
-
-      <section>
-        <SectionHeading>Findings breakdown</SectionHeading>
-        <div className="card mb-4">
-          <div className="text-sm font-medium mb-3">Severity distribution</div>
-          <SeverityBar rows={data.by_severity} />
-        </div>
-        <div className="grid md:grid-cols-3 gap-4">
-          <MiniTable title="By severity" col="Severity" rows={data.by_severity} colorSeverity />
-          <MiniTable title="By status" col="Status" rows={data.by_status} />
-          <MiniTable title="By category" col="Category" rows={data.by_category} />
-        </div>
-        {data.qa_flags > 0 && (
-          <div className="mt-4 rounded-xl border border-danger/50 bg-danger/10 text-sm px-4 py-3">
-            {data.qa_flags} finding(s) carry verification flags (unverified or fabricated evidence, CVSS/severity or
-            reviewer disagreement, or prompt injection) — review before reporting.
-          </div>
-        )}
-      </section>
-
-      <section>
-        <SectionHeading>Risk priorities</SectionHeading>
-        <p className="text-muted text-sm mb-4">
-          Risk-based prioritization — CVSS blended with EPSS exploit probability, CISA KEV, and environment. Distinct
-          from raw severity.
+    <div className="animate-in grid gap-8">
+      {data.qa_flags > 0 && (
+        <p className="border-l-2 border-warn/70 pl-3 py-1 text-sm text-warn">
+          {data.qa_flags} finding{data.qa_flags === 1 ? "" : "s"} carry verification flags &mdash;
+          unverified evidence, severity disagreement, or prompt injection. Review before reporting.
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 stagger">
-          <Metric label="Urgent" value={data.risk_priorities.Urgent ?? 0} accent="danger" />
-          <Metric label="High" value={data.risk_priorities.High ?? 0} accent="warn" />
-          <Metric label="Moderate" value={data.risk_priorities.Moderate ?? 0} accent="accent" />
-          <Metric label="Low" value={data.risk_priorities.Low ?? 0} />
-        </div>
-        <div className="grid lg:grid-cols-2 gap-4">
-          <Panel
-            title="OWASP Top 10:2025 coverage"
-            subtitle="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
-          >
-            <BarList
-              rows={data.owasp_coverage}
-              emphasise={(label) => label !== "Unmapped (assign manually)"}
-            />
-          </Panel>
-          <MiniTable title="Coverage detail" col="OWASP 2025 category" rows={data.owasp_coverage} countLabel="Findings" />
-        </div>
-      </section>
+      )}
 
-      <section>
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-          <h2 className="term-h text-muted">Usage</h2>
-          <div className="flex items-center gap-1">
-            {([["1h", "1H"], ["24h", "24H"], ["7d", "7D"], ["30d", "30D"], ["all", "ALL"]] as const).map(
-              ([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setUsageWindow(key)}
-                  aria-pressed={usageWindow === key}
-                  className={`rounded-lg border px-2 py-1 text-[11px] tracking-widest transition-all ${
-                    usageWindow === key
-                      ? "border-accent/70 text-accent"
-                      : "border-border text-muted hover:border-accent/50 hover:text-text"
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            )}
-          </div>
+      {/* Severity: one bar, no box. A single line of information does not need a
+          bordered container around it. */}
+      <Section title="Severity">
+        <SeverityBar rows={data.by_severity} />
+      </Section>
+
+      {/* Risk sits beside severity because the interesting fact is the DIFFERENCE
+          between them: priority blends CVSS with exploit probability and KEV, so a
+          Critical that nobody is exploiting outranks nothing. */}
+      <Section
+        title="Risk priority"
+        note="CVSS blended with EPSS exploit probability, CISA KEV, and environment. Deliberately distinct from raw severity."
+      >
+        <div className="flex flex-wrap gap-x-8 gap-y-2">
+          <Figure label="Urgent" value={risk.Urgent ?? 0} tone="danger" />
+          <Figure label="High" value={risk.High ?? 0} tone="warn" />
+          <Figure label="Moderate" value={risk.Moderate ?? 0} tone="accent" />
+          <Figure label="Low" value={risk.Low ?? 0} />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 stagger">
-          <Metric label="Total LLM calls" value={u.calls} />
-          <Metric label="Total tokens" value={u.total_tokens.toLocaleString()} />
-          <Metric label="Prompt tokens" value={u.prompt_tokens.toLocaleString()} />
-          <Metric label="Completion tokens" value={u.completion_tokens.toLocaleString()} />
+      </Section>
+
+      <Section title="Breakdown">
+        <div className="grid lg:grid-cols-3 gap-x-10 gap-y-6">
+          <Table col="Status" rows={data.by_status} />
+          <Table col="Category" rows={data.by_category} />
+          <Table col="Severity" rows={data.by_severity} colorSeverity />
         </div>
-        {u.by_model && u.by_model.length > 0 && (
-          <div className="card overflow-x-auto p-0">
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted border-b border-border">
-                <tr>
-                  <th className="p-3 font-medium">Model</th>
-                  <th className="font-medium">Calls</th>
-                  <th className="p-3 font-medium text-right">Total tokens</th>
+      </Section>
+
+      <Section
+        title="OWASP Top 10:2025 coverage"
+        note="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
+      >
+        <div className="grid lg:grid-cols-2 gap-x-10 gap-y-4">
+          <BarList rows={mapped} />
+          {unmapped && (
+            <p className="text-xs text-muted self-start">
+              <span className="text-text">{unmapped.count}</span> finding
+              {unmapped.count === 1 ? "" : "s"} could not be mapped from the available signal and are
+              left for manual assignment. That is deliberate: a guessed framework category is worse
+              than an absent one, because it looks authoritative in a report.
+            </p>
+          )}
+        </div>
+      </Section>
+
+      <Section title="LLM usage">
+        <div className="flex items-center gap-1 mb-4">
+          {([["1h", "1H"], ["24h", "24H"], ["7d", "7D"], ["30d", "30D"], ["all", "ALL"]] as const).map(
+            ([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setUsageWindow(key)}
+                aria-pressed={usageWindow === key}
+                className={`rounded border px-2 py-0.5 text-[10px] tracking-widest transition-colors ${
+                  usageWindow === key
+                    ? "border-accent/70 text-accent"
+                    : "border-border text-muted hover:border-accent/50 hover:text-text"
+                }`}
+              >
+                {label}
+              </button>
+            )
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-x-8 gap-y-2 mb-5">
+          <Figure label="Calls" value={u.calls} />
+          <Figure label="Total tokens" value={u.total_tokens} />
+          <Figure label="Prompt" value={u.prompt_tokens} />
+          <Figure label="Completion" value={u.completion_tokens} />
+        </div>
+
+        {u.by_model?.length > 0 && (
+          <table className="w-full text-sm max-w-2xl">
+            <thead className="text-muted text-left border-b border-border">
+              <tr>
+                <th className="font-normal text-xs pb-1.5">Model</th>
+                <th className="font-normal text-xs pb-1.5 text-right">Calls</th>
+                <th className="font-normal text-xs pb-1.5 text-right">Tokens</th>
+              </tr>
+            </thead>
+            <tbody>
+              {u.by_model.map((m) => (
+                <tr key={m.model} className="border-b border-border/40 last:border-0">
+                  <td className="py-1.5 font-mono text-xs">{m.model}</td>
+                  <td className="py-1.5 text-right tabular-nums">{m.calls}</td>
+                  <td className="py-1.5 text-right tabular-nums">{m.total_tokens.toLocaleString()}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {u.by_model.map((m, i) => (
-                  <tr key={i} className="border-b border-border/50">
-                    <td className="p-3">{m.model || "-"}</td>
-                    <td>{m.calls}</td>
-                    <td className="p-3 text-right">{m.total_tokens.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         )}
-      </section>
+      </Section>
     </div>
   );
 }
 
-function Metric({ label, value, accent }: { label: string; value: number | string; accent?: Accent }) {
-  const color =
-    accent === "danger" ? "text-danger" : accent === "warn" ? "text-warn" : accent === "accent" ? "text-accent" : "";
-  // Only numbers count up. A string is a label, and animating it would be theatre.
-  const numeric = typeof value === "number";
-  const counted = useCountUp(numeric ? value : 0);
+/** A rule and a label. Not a box: boxing every group is what turns a page into a
+ *  stack of identical containers with no hierarchy. */
+function Section({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="card card-hover">
-      <div className="text-muted text-xs uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl mt-1 tabular-nums ${color}`}>
-        {numeric ? counted.toLocaleString() : value}
+    <section>
+      <div className="flex items-baseline gap-3 border-b border-border pb-1.5 mb-4">
+        <h2 className="text-[11px] tracking-widest text-muted">
+          <span className="text-accent">&gt;</span> {title.toUpperCase()}
+        </h2>
+        {note && <p className="text-[11px] text-muted/70 truncate hidden md:block">{note}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Label above a number, inline. The figure is the content; a bordered card
+ *  around each one adds nothing but height. */
+function Figure({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "danger" | "warn" | "accent";
+}) {
+  const color =
+    tone === "danger" ? "text-danger" : tone === "warn" ? "text-warn" : tone === "accent" ? "text-accent" : "text-text";
+  return (
+    <div>
+      <div className="text-[10px] tracking-widest text-muted">{label.toUpperCase()}</div>
+      <div className={`text-xl tabular-nums ${value === 0 ? "text-muted/50" : color}`}>
+        {value.toLocaleString()}
       </div>
     </div>
   );
 }
 
-function MiniTable({
-  title,
+/** Rows and counts, ruled rather than boxed. */
+function Table({
   col,
   rows,
   colorSeverity,
-  countLabel = "Count",
 }: {
-  title: string;
   col: string;
   rows: Row[];
   colorSeverity?: boolean;
-  countLabel?: string;
 }) {
+  if (rows.length === 0) {
+    return (
+      <div>
+        <div className="text-[10px] tracking-widest text-muted mb-2">{col.toUpperCase()}</div>
+        <p className="text-xs text-muted">Nothing yet.</p>
+      </div>
+    );
+  }
+  const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
   return (
     <div>
-      <div className="text-sm font-medium mb-2">{title}</div>
-      <div className="card overflow-x-auto p-0">
-        <table className="w-full text-sm">
-          <thead className="text-left text-muted border-b border-border">
-            <tr>
-              <th className="p-3 font-medium">{col}</th>
-              <th className="p-3 font-medium text-right">{countLabel}</th>
+      <div className="text-[10px] tracking-widest text-muted mb-2">{col.toUpperCase()}</div>
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-b border-border/40 last:border-0">
+              <td className="py-1.5 pr-2">
+                {colorSeverity ? <span className={sevClass(r.label)}>{r.label}</span> : r.label}
+              </td>
+              <td className="py-1.5 text-right tabular-nums w-12">{r.count}</td>
+              {/* A share bar in the row itself, so proportion is legible without a
+                  second chart repeating the same numbers elsewhere. */}
+              <td className="py-1.5 w-16 pl-3">
+                <span className="block h-1 rounded-full bg-white/5 overflow-hidden">
+                  <span
+                    className="grow-x block h-full rounded-full bg-accent/50"
+                    style={{ width: `${(r.count / total) * 100}%` }}
+                  />
+                </span>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td className="p-3 text-muted" colSpan={2}>None</td>
-              </tr>
-            ) : (
-              rows.map((r, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="p-3">{colorSeverity ? <span className={sevClass(r.label)}>{r.label}</span> : r.label}</td>
-                  <td className="p-3 text-right">{r.count}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

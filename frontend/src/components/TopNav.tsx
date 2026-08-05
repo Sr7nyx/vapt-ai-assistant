@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
@@ -32,6 +32,7 @@ const TABS = [
 
 export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
   const path = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const token = session?.id_token;
   const { projectId, setProjectId } = useProject();
@@ -62,6 +63,20 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
   useLayoutEffect(() => {
     place();
   }, [place, path, projects.length]);
+
+  // Alt+1..7 jumps to a tab. Alt rather than a bare digit so typing a number into
+  // any field is unaffected, and it is the modifier a terminal user expects.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > TABS.length) return;
+      e.preventDefault();
+      router.push(TABS[n - 1].href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
 
   useEffect(() => {
     const strip = stripRef.current;
@@ -135,18 +150,22 @@ export default function TopNav({ onSignOut }: { onSignOut: () => void }) {
             style={{ left: bar.left, width: bar.width }}
           />
         )}
-        {TABS.map((t) => {
+        {TABS.map((t, i) => {
           const on = active(t.href);
           return (
             <Link
               key={t.href}
               href={t.href}
               aria-current={on ? "page" : undefined}
-              className={`px-3.5 py-2 text-[11px] tracking-widest whitespace-nowrap transition-colors ${
-                on ? "text-highlight bg-highlight/5" : "text-muted hover:text-text hover:bg-white/5"
+              title={`Alt+${i + 1}`}
+              className={`group flex items-baseline gap-1.5 px-3 py-2 text-[11px] tracking-widest whitespace-nowrap transition-colors ${
+                on ? "text-highlight" : "text-muted hover:text-text"
               }`}
             >
-              {on ? `[${t.label}]` : t.label}
+              <span className={on ? "text-highlight/50" : "text-border group-hover:text-muted"}>
+                {i + 1}
+              </span>
+              {t.label}
             </Link>
           );
         })}

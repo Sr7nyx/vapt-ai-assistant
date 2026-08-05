@@ -161,8 +161,11 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     @apply opacity-60 ml-0.5;
   }
 
+  /* A panel, not a marketing card. Tight radius and modest padding: the generous
+     rounded box with airy padding is the shape of a landing page, and repeating it
+     for every group is what makes an interface read as templated. */
   .card {
-    @apply bg-surface border border-border rounded-xl p-4 transition-all;
+    @apply bg-surface/60 border border-border rounded-lg p-3.5 transition-all;
   }
   .card-hover {
     @apply hover:border-accent/40;
