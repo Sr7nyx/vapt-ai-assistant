@@ -7,6 +7,7 @@ import { useProject } from "@/lib/ProjectContext";
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Loading";
+import { Section } from "@/components/Terminal";
 
 export default function ProjectsPage() {
   const { data: session } = useSession();
@@ -58,7 +59,8 @@ export default function ProjectsPage() {
   return (
     <div className="animate-in mx-auto w-full max-w-5xl">
 
-      <div className="card grid gap-3 mb-6">
+      <Section title="New project">
+        <div className="grid gap-3">
         <input className="input" placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input className="input" placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
         <input className="input" placeholder="Scope" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} />
@@ -67,8 +69,10 @@ export default function ProjectsPage() {
             {creating ? "Creating…" : "Create project"}
           </button>
         </div>
-      </div>
+        </div>
+      </Section>
 
+      <Section title="Projects">
       {loading ? (
         <Skeleton rows={3} />
       ) : (
@@ -88,6 +92,7 @@ export default function ProjectsPage() {
           {projects.length === 0 && <p className="text-muted text-sm">No projects yet.</p>}
         </div>
       )}
+      </Section>
     </div>
   );
 }

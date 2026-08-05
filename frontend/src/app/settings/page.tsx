@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
 import { GithubButton, SourceFooter, GithubMark, REPO_URL } from "@/components/SourceLinks";
 import InfoHint, { LabelWithHint } from "@/components/InfoHint";
+import { Section } from "@/components/Terminal";
 import { getMotion, setMotion, MotionSetting } from "@/lib/motion";
 
 const PRESETS = [
@@ -103,18 +104,15 @@ export default function SettingsPage() {
   return (
     <div className="animate-in mx-auto w-full max-w-3xl">
 
-      <section className="card grid gap-4 mb-6">
-        <div className="flex items-center gap-1.5">
-          <h2 className="term-h text-muted">Model configuration</h2>
-          <InfoHint label="About model configuration">
+      <Section title="Model configuration" actions={<>          <InfoHint label="About model configuration">
             The pipeline uses two model lanes. Anything left blank falls back to the server configuration.
             <span className="block mt-2">
               Each lane has its own provider quota, so pointing them at different providers roughly
               multiplies your free-tier headroom. A common split is a fast model for extraction and a
               stronger reasoning model, on a separate provider, for review.
             </span>
-          </InfoHint>
-        </div>
+          </InfoHint></>}>
+        <div className="grid gap-4">
 
         <label className="grid gap-1.5">
           <span className="flex items-center gap-1.5 text-sm text-muted">
@@ -250,12 +248,10 @@ export default function SettingsPage() {
             Clear
           </button>
         </div>
-      </section>
+        </div>
+      </Section>
 
-      <section className="card grid gap-3">
-        <div className="flex items-center gap-1.5">
-          <h2 className="term-h text-muted">Interface</h2>
-          <InfoHint label="About motion">
+      <Section title="Interface" actions={<>          <InfoHint label="About motion">
             Animations are on by default. Your operating system exposes a
             &quot;reduce motion&quot; preference, but on a managed device it is often
             set by policy rather than chosen, so following it silently would leave
@@ -265,8 +261,8 @@ export default function SettingsPage() {
               operating system, or <span className="text-text">Reduced</span> to turn
               animation off regardless.
             </span>
-          </InfoHint>
-        </div>
+          </InfoHint></>}>
+        <div className="grid gap-3">
 
         <fieldset className="grid gap-2">
           <legend className="sr-only">Motion</legend>
@@ -303,19 +299,17 @@ export default function SettingsPage() {
             next load.
           </p>
         </fieldset>
-      </section>
+        </div>
+      </Section>
 
-      <section className="card grid gap-3">
-        <div className="flex items-center gap-1.5">
-          <h2 className="term-h text-muted">Account</h2>
-          <InfoHint label="Connection details">
+      <Section title="Account" actions={<>          <InfoHint label="Connection details">
             Signed in with Google. The ID token is verified server-side on every request and all data is
             scoped to this account.
             <span className="block mt-2 font-mono text-[11px] break-all">
               API: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
             </span>
-          </InfoHint>
-        </div>
+          </InfoHint></>}>
+        <div className="grid gap-3">
 
         <div className="text-sm">{session?.user?.email}</div>
 
@@ -346,18 +340,16 @@ export default function SettingsPage() {
             Sign out
           </button>
         </div>
-      </section>
+        </div>
+      </Section>
 
-      <section className="card grid gap-3">
-        <div className="flex items-center gap-1.5">
-          <h2 className="term-h text-muted">About</h2>
-          <InfoHint label="About this tool">
+      <Section title="About" actions={<>          <InfoHint label="About this tool">
             An AI-assisted workspace for penetration testing, built so the model is assumed wrong until
             proven otherwise: CVSS is computed deterministically, claims are checked against their evidence
             in code where that is possible, and a second reviewer argues the false-positive case before
             anything reaches a report.
-          </InfoHint>
-        </div>
+          </InfoHint></>}>
+        <div className="grid gap-3">
 
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
           <div className="flex justify-between border-b border-border/50 pb-1">
@@ -385,7 +377,8 @@ export default function SettingsPage() {
         </div>
 
         <SourceFooter className="pt-2 border-t border-border/50 mt-1" />
-      </section>
+        </div>
+      </Section>
     </div>
   );
 }

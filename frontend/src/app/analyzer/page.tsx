@@ -18,6 +18,7 @@ import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/Selectio
 import FindingEditor from "@/components/FindingEditor";
 import { sevClass } from "@/components/Severity";
 import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag, VerifiedChip } from "@/components/ReviewPanel";
+import { Section } from "@/components/Terminal";
 import { ReviewSummary, VerdictResolution, Verification } from "@/lib/types";
 
 const ANALYSIS_TYPES = [
@@ -211,7 +212,8 @@ export default function AnalyzerPage() {
       <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
-      <div className="card grid gap-4 mb-4">
+      <Section title="Input">
+        <div className="grid gap-4">
         <Field label="Project">
           <select className="input" value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">— no project selected —</option>
@@ -323,7 +325,8 @@ export default function AnalyzerPage() {
             )}
           </button>
         </div>
-      </div>
+        </div>
+      </Section>
 
       <JobProgress job={job} />
       <JobLog job={job} />
@@ -338,7 +341,7 @@ export default function AnalyzerPage() {
                 onToggle={sel.toggleAll}
                 label="SELECT ALL"
               />
-              <h2 className="term-h text-muted">{results.length} finding(s)</h2>
+              <h2 className="text-[11px] tracking-widest text-muted"><span className="text-accent">&gt;</span> {results.length} FINDING(S)</h2>
             </div>
             <button className="btn-sm" onClick={() => commit()} disabled={committing}>
               {committing ? "Committing…" : "Commit all"}

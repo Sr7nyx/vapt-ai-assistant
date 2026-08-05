@@ -10,6 +10,7 @@ import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox } from "@/components/SelectionBar";
 import { sevClass } from "@/components/Severity";
 import { Skeleton } from "@/components/Loading";
+import { Section } from "@/components/Terminal";
 
 export default function ReportsPage() {
   const { data: session } = useSession();
@@ -101,7 +102,8 @@ export default function ReportsPage() {
   return (
     <div className="animate-in mx-auto w-full max-w-3xl">
 
-      <div className="card grid gap-3 mb-4">
+      <Section title="Narrative">
+        <div className="grid gap-3">
         <textarea
           className="input min-h-32"
           placeholder="Executive summary (optional)"
@@ -109,10 +111,11 @@ export default function ReportsPage() {
           onChange={(e) => setExec(e.target.value)}
         />
         <input className="input" placeholder="Methodology" value={method} onChange={(e) => setMethod(e.target.value)} />
-      </div>
+        </div>
+      </Section>
 
-      <div className="card grid gap-3 mb-4">
-        <h2 className="term-h text-muted">Scope</h2>
+      <Section title="Scope">
+        <div className="grid gap-3">
         {loading ? (
           <Skeleton rows={2} />
         ) : (
@@ -183,7 +186,8 @@ export default function ReportsPage() {
             )}
           </>
         )}
-      </div>
+        </div>
+      </Section>
 
       <div className="flex gap-2">
         {["docx", "pdf", "xlsx", "json"].map((fmt) => (

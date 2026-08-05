@@ -21,8 +21,8 @@ import { motionReduced } from "@/lib/motion";
  * Arithmetic and a <pre>. No image, no 3D library, no dependency.
  */
 
-const COLS = 74;
-const ROWS = 34;
+const DEFAULT_COLS = 74;
+const DEFAULT_ROWS = 34;
 const FPS = 45;
 
 const RAMP = " .,:;=+ox*OQ#%@";
@@ -96,7 +96,7 @@ function surfaceNoise(x: number, y: number, z: number): number {
 
 /** Cells lit by a word's glyphs, centred on a point rather than on the grid, so
  *  the word surfaces where the pointer landed. */
-function wordMask(word: string, atCol: number, atRow: number): Set<number> {
+function wordMask(word: string, atCol: number, atRow: number, COLS: number, ROWS: number): Set<number> {
   const on = new Set<number>();
   const letters = word.toUpperCase().split("").filter((c) => FONT[c]);
   if (!letters.length) return on;
@@ -127,9 +127,21 @@ export default function AsciiOrb({
   words = DEFAULT_WORDS,
   hueCycle = true,
   baseHue = 77,
+  cols = DEFAULT_COLS,
+  rows = DEFAULT_ROWS,
+  fontSize,
+  interactive = true,
   className = "",
 }: {
   words?: string[];
+  /** Character grid. Smaller grids read as a badge rather than a centrepiece. */
+  cols?: number;
+  rows?: number;
+  /** Overrides the responsive default; give a fixed size when the orb sits in
+   *  chrome rather than filling a column. */
+  fontSize?: string;
+  /** A decorative instance should not invite a click it cannot usefully answer. */
+  interactive?: boolean;
   /** Cycle the hue over time. Off pins the orb to baseHue. */
   hueCycle?: boolean;
   /** Starting hue; 77 is the lime highlight. 136 is the phosphor green the rest
@@ -142,11 +154,13 @@ export default function AsciiOrb({
   const aRef = useRef<HTMLPreElement>(null);
   const bRef = useRef<HTMLPreElement>(null);
   const haloRef = useRef<HTMLSpanElement>(null);
+  const COLS = cols;
+  const ROWS = rows;
   const st = useRef({
     start: 0,
     impact: -1,
-    col: COLS / 2,
-    row: ROWS / 2,
+    col: cols / 2,
+    row: rows / 2,
     word: "",
     idx: 0,
     mask: new Set<number>(),
@@ -179,9 +193,9 @@ export default function AsciiOrb({
     }
     s.word = words[s.idx % words.length];
     s.idx += 1;
-    s.mask = wordMask(s.word, s.col, s.row);
+    s.mask = wordMask(s.word, s.col, s.row, COLS, ROWS);
     s.impact = performance.now();
-  }, [words]);
+  }, [words, COLS, ROWS]);
 
   useEffect(() => {
     const reduced = motionReduced();
@@ -382,22 +396,29 @@ export default function AsciiOrb({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [hueCycle, baseHue]);
+  }, [hueCycle, baseHue, COLS, ROWS]);
 
   const layer = "col-start-1 row-start-1 m-0 select-none whitespace-pre leading-none";
-  const size = { fontSize: "clamp(5px, 1.3vw, 9px)", lineHeight: "1.02" as const };
+  const size = {
+    fontSize: fontSize ?? "clamp(5px, 1.3vw, 9px)",
+    lineHeight: "1.02" as const,
+  };
 
   return (
     <button
       type="button"
-      onClick={strike}
-      aria-label="Decorative animation. Activate to disturb it."
-      title="Click anywhere on it"
-      className={`relative block w-full cursor-crosshair bg-transparent p-0 ${className}`}
+      onClick={interactive ? strike : undefined}
+      aria-hidden={!interactive}
+      tabIndex={interactive ? 0 : -1}
+      aria-label={interactive ? "Decorative animation. Activate to disturb it." : undefined}
+      title={interactive ? "Click anywhere on it" : undefined}
+      className={`relative block w-full bg-transparent p-0 ${
+        interactive ? "cursor-crosshair" : "cursor-default pointer-events-none"
+      } ${className}`}
     >
       {/* Ambient terms, drifting. Decorative and non-interactive. */}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        {ambient.map((a, i) => (
+        {interactive && ambient.map((a, i) => (
           <span
             key={i}
             className="orb-drift absolute text-[9px] tracking-[0.3em] text-accent/25"

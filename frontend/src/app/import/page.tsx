@@ -16,6 +16,7 @@ import { verdictOf, sevClass } from "@/components/Severity";
 import { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
+import { Section } from "@/components/Terminal";
 import { Project, ReviewSummary, VerdictResolution } from "@/lib/types";
 
 // Kept in step with the analyzer: an imported finding and an extracted one land in
@@ -175,7 +176,8 @@ export default function ImportPage() {
       <LaneStatus />
       <DemoQuotaBanner refreshKey={quotaTick} />
 
-      <div className="card grid gap-4 mb-4">
+      <Section title="Source">
+        <div className="grid gap-4">
         <Field label="Project">
           <select
             className="input"
@@ -228,7 +230,8 @@ export default function ImportPage() {
             )}
           </button>
         </div>
-      </div>
+        </div>
+      </Section>
 
       {(summary || effective.length > 0) && (
         <>

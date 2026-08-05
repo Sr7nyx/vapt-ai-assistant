@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/Loading";
 import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList } from "@/components/Charts";
 import { swr, readCache } from "@/lib/cache";
+import { Section, Figure } from "@/components/Terminal";
+import AsciiOrb from "@/components/AsciiOrb";
 
 /**
  * Overview.
@@ -77,10 +79,17 @@ export default function Dashboard() {
       )}
 
       {/* Severity: one bar, no box. A single line of information does not need a
-          bordered container around it. */}
-      <Section title="Severity">
-        <SeverityBar rows={data.by_severity} />
-      </Section>
+          bordered container around it. The orb beside it is decorative and says so
+          in the markup: an ornament that looks like an instrument is worse than no
+          ornament, so it is aria-hidden and cannot be clicked. */}
+      <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
+        <Section title="Severity">
+          <SeverityBar rows={data.by_severity} />
+        </Section>
+        <div className="hidden md:block w-40 -mt-2 opacity-70">
+          <AsciiOrb cols={28} rows={13} fontSize="7px" interactive={false} baseHue={136} />
+        </div>
+      </div>
 
       {/* Risk sits beside severity because the interesting fact is the DIFFERENCE
           between them: priority blends CVSS with exploit probability and KEV, so a
@@ -170,53 +179,6 @@ export default function Dashboard() {
           </table>
         )}
       </Section>
-    </div>
-  );
-}
-
-/** A rule and a label. Not a box: boxing every group is what turns a page into a
- *  stack of identical containers with no hierarchy. */
-function Section({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="flex items-baseline gap-3 border-b border-border pb-1.5 mb-4">
-        <h2 className="text-[11px] tracking-widest text-muted">
-          <span className="text-accent">&gt;</span> {title.toUpperCase()}
-        </h2>
-        {note && <p className="text-[11px] text-muted/70 truncate hidden md:block">{note}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** Label above a number, inline. The figure is the content; a bordered card
- *  around each one adds nothing but height. */
-function Figure({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "danger" | "warn" | "accent";
-}) {
-  const color =
-    tone === "danger" ? "text-danger" : tone === "warn" ? "text-warn" : tone === "accent" ? "text-accent" : "text-text";
-  return (
-    <div>
-      <div className="text-[10px] tracking-widest text-muted">{label.toUpperCase()}</div>
-      <div className={`text-xl tabular-nums ${value === 0 ? "text-muted/50" : color}`}>
-        {value.toLocaleString()}
-      </div>
     </div>
   );
 }
