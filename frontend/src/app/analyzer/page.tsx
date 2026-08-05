@@ -9,8 +9,8 @@ import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/pr
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
-import JobProgress from "@/components/JobProgress";
 import JobLog from "@/components/JobLog";
+import JobConsole from "@/components/JobConsole";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
 import ScanOverlay from "@/components/ScanOverlay";
@@ -344,7 +344,8 @@ export default function AnalyzerPage() {
         </div>
       </Section>
 
-      <JobProgress job={job} />
+      {/* Kept below for reference once the console is dismissed. While the console
+          is open its backdrop covers this, so there is no visible duplication. */}
       <JobLog job={job} />
 
       {results.length > 0 && (
@@ -422,6 +423,10 @@ export default function AnalyzerPage() {
       )}
 
       {limitMsg && <DemoLimitModal message={limitMsg} onClose={() => setLimitMsg(null)} />}
+
+      {/* At the root: an overlay must not live inside a branch that can unmount
+          while its job is still running. */}
+      <JobConsole job={job} title="Analysis" resultCount={results.length} />
     </div>
   );
 }

@@ -8,8 +8,8 @@ import { useProject } from "@/lib/ProjectContext";
 import { getApiKey, getActiveJob, setActiveJob, buildLaneConfig } from "@/lib/prefs";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Loading";
-import JobProgress from "@/components/JobProgress";
 import JobLog from "@/components/JobLog";
+import JobConsole from "@/components/JobConsole";
 import { DemoQuotaBanner, DemoLimitModal, isDemoLimit } from "@/components/DemoQuota";
 import LaneStatus from "@/components/LaneStatus";
 import { verdictOf, sevClass } from "@/components/Severity";
@@ -269,9 +269,8 @@ export default function ImportPage() {
             </button>
           </SelectionBar>
 
-          <JobProgress job={job} />
+          {/* Kept below for reference once the console is dismissed. */}
           <JobLog job={job} />
-      <JobLog job={job} />
 
           <div className="card overflow-x-auto p-0">
             <table className="w-full text-sm">
@@ -354,6 +353,10 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div className="card">
       <div className="text-muted text-sm">{label}</div>
       <div className="text-2xl font-semibold mt-1">{value}</div>
+
+      {/* At the root: an overlay must not live inside a branch that can unmount
+          while its job is still running. */}
+      <JobConsole job={job} title="Triage" resultCount={effective.length} />
     </div>
   );
 }
