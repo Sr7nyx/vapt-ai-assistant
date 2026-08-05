@@ -107,7 +107,10 @@ export default function ReportsPage() {
     const noCvss = included.filter((f) => !String(f.cvss || "").trim());
     const falsePositive = included.filter((f) => String(f.status || "") === "False Positive");
 
-    return [
+    // Annotated rather than inferred: inside a bare array literal TypeScript widens
+    // `tone: "danger"` to `string`, and .filter() carries the widened type through,
+    // so the result no longer satisfies Issue[].
+    const all: Issue[] = [
       {
         key: "refuted",
         label: "contradicted by the evidence",
@@ -145,7 +148,8 @@ export default function ReportsPage() {
         findings: noCvss,
         tone: "warn",
       },
-    ].filter((i) => i.findings.length > 0);
+    ];
+    return all.filter((i) => i.findings.length > 0);
   }, [included]);
 
   const blocking = issues.filter((i) => i.tone === "danger");
