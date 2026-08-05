@@ -201,6 +201,10 @@ more reason this wants a persistent host, not serverless.
 
 - Per-user data isolation is enforced in every query; finding access is
   authorized through the parent project.
+- Row level security is enabled on every table with no policies attached, so the
+  auto-generated PostgREST API cannot reach application data. The service connects
+  as a role that bypasses RLS, and `init()` verifies that before enabling it rather
+  than leaving the app silently returning empty results.
 - User-supplied LLM base URLs are allowlisted and rejected if they resolve to
   loopback, private, link-local, or reserved addresses (SSRF protection in
   `llm_config.py`).

@@ -74,3 +74,31 @@ create table if not exists llm_usage (
     created_at        timestamptz default now()
 );
 create index if not exists idx_usage_user on llm_usage(user_id);
+
+
+-- Row level security -----------------------------------------------------------
+-- Supabase exposes every public-schema table through PostgREST, reachable with the
+-- anon key. That key is public by design, so with RLS off anyone holding it can
+-- read and write application data directly, bypassing the API along with its token
+-- verification, per-user scoping and audit trail.
+--
+-- RLS is enabled with NO policies. No policy means no row is visible to the roles
+-- PostgREST uses, which closes that path. The application connects as a role that
+-- bypasses RLS and is unaffected.
+--
+-- Confirm before running, or every query will silently return nothing:
+--   SELECT current_user, rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user;
+
+ALTER TABLE users          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE findings       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE llm_usage      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE demo_runs      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finding_events ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON users          FROM anon, authenticated;
+REVOKE ALL ON projects       FROM anon, authenticated;
+REVOKE ALL ON findings       FROM anon, authenticated;
+REVOKE ALL ON llm_usage      FROM anon, authenticated;
+REVOKE ALL ON demo_runs      FROM anon, authenticated;
+REVOKE ALL ON finding_events FROM anon, authenticated;

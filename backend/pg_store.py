@@ -137,7 +137,44 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_events_finding ON finding_events(finding_id, id)",
     "CREATE INDEX IF NOT EXISTS idx_events_user ON finding_events(user_id, id)",
+
+    # --- Row level security ------------------------------------------------
+    # Supabase publishes every table in the public schema through PostgREST,
+    # reachable with the anon key. That key is public by design, so with RLS off
+    # anyone holding it can read and write application data directly, bypassing
+    # this API entirely along with its token verification, per-user scoping and
+    # audit trail.
+    #
+    # RLS is therefore enabled with NO policies attached. No policy means no row
+    # is visible to the roles PostgREST uses, which closes that path completely.
+    # The application is unaffected because it connects as a role that bypasses
+    # RLS; see init() below, which verifies exactly that and refuses to start if
+    # it is not true.
+    #
+    # Applied here rather than by hand in the dashboard so that a fresh
+    # deployment, which creates these tables from scratch, is protected on its
+    # first boot rather than whenever someone remembers.
+    "ALTER TABLE users          ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE projects       ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE findings       ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE llm_usage      ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE demo_runs      ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE finding_events ENABLE ROW LEVEL SECURITY",
+
+    # Belt and braces: PostgREST's roles have no business holding grants on these
+    # tables at all. Revoking is explicit where RLS is a default-deny.
+    "REVOKE ALL ON users          FROM anon, authenticated",
+    "REVOKE ALL ON projects       FROM anon, authenticated",
+    "REVOKE ALL ON findings       FROM anon, authenticated",
+    "REVOKE ALL ON llm_usage      FROM anon, authenticated",
+    "REVOKE ALL ON demo_runs      FROM anon, authenticated",
+    "REVOKE ALL ON finding_events FROM anon, authenticated",
 ]
+
+
+def _touches_rls(statement: str) -> bool:
+    upper = statement.upper()
+    return "ROW LEVEL SECURITY" in upper or upper.startswith("REVOKE")
 
 
 def init():
@@ -148,8 +185,38 @@ def init():
         _pool.open()
     with _pool.connection() as conn:
         with conn.cursor() as cur:
+            # Checked before the ALTERs run. With RLS on and no policies, a role
+            # that does NOT bypass RLS sees zero rows in every table -- the app
+            # would come up looking empty rather than broken, which is the worst
+            # way for this to fail. Better to refuse to start and say why.
+            cur.execute(
+                "SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user"
+            )
+            row = cur.fetchone()
+            privileged = bool(row and (row[0] or row[1]))
+
             for statement in SCHEMA_STATEMENTS:
-                cur.execute(statement)
+                if not privileged and _touches_rls(statement):
+                    # Leave RLS alone rather than locking the app out of its own
+                    # data. Surfaced loudly so it is fixed deliberately.
+                    print(
+                        "[pg_store] WARNING: the database role "
+                        f"'{row[0] if row else 'unknown'}' does not bypass RLS, so row "
+                        "level security was NOT enabled. The Supabase REST API may be "
+                        "able to read these tables. Connect as a role with BYPASSRLS "
+                        "and restart."
+                    )
+                    continue
+                try:
+                    cur.execute(statement)
+                except Exception as exc:
+                    # REVOKE fails if the anon/authenticated roles do not exist,
+                    # which is the normal case outside Supabase. Not fatal.
+                    if _touches_rls(statement):
+                        print(f"[pg_store] note: skipped '{statement[:48]}...': {exc}")
+                        conn.rollback()
+                    else:
+                        raise
 
 
 def _now():
