@@ -13,37 +13,21 @@
 }
 
 body {
+  /* Two very wide washes and nothing else. No repeating pattern: fine, regular
+     texture is what makes a dark interface tiring to read for long stretches, and
+     on a scaled display it beats against the pixel grid and shimmers. These are
+     large enough to read as depth rather than as detail. */
   background:
-    radial-gradient(900px 480px at 100% -10%, rgba(var(--phosphor), 0.05), transparent 55%),
+    radial-gradient(1400px 900px at 88% -20%, rgba(var(--phosphor), 0.055), transparent 62%),
+    radial-gradient(1100px 800px at 5% 105%, rgba(var(--phosphor), 0.03), transparent 60%),
     #0a0e0c;
+  background-attachment: fixed;
   color: #cfe0d2;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
 }
 
-/* A very faint scanline wash. Deliberately near-invisible: it should read as
-   texture on a dark panel, never as interference over body text. Disabled for
-   anyone who has asked for reduced motion, since fine repeating patterns are a
-   common trigger. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.012) 0px,
-    rgba(255, 255, 255, 0.012) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-}
-html[data-motion="reduced"] body::after { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  html[data-motion="system"] body::after { display: none; }
-}
 
 
 /* A thin phosphor scrollbar. The default chrome scrollbar is the loudest piece of
@@ -172,11 +156,16 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   /* A panel, not a marketing card. Tight radius and modest padding: the generous
      rounded box with airy padding is the shape of a landing page, and repeating it
      for every group is what makes an interface read as templated. */
-  /* One column for the whole application: chrome and content share it, so the
-     status line's right edge lines up with the content's right edge instead of
-     running to the window edge while the content stops short. */
+  /* One column for the whole application, chrome and content alike, so their
+     edges line up.
+
+     No max-width. The cap existed to stop elements stretching across a wide
+     screen, but that is now handled where it belongs -- on the elements
+     themselves, which are sized to their content, and on prose, which is capped
+     by .measure. With those in place an outer cap only strands empty margins on
+     both sides of a page that is already correctly laid out. */
   .app-col {
-    @apply w-full max-w-[1800px] mx-auto px-4;
+    @apply w-full mx-auto px-6 lg:px-8;
   }
 
   /* Long-form text stays readable regardless of how wide the window is. Data can

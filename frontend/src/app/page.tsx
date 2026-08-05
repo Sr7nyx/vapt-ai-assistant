@@ -118,8 +118,10 @@ export default function Dashboard() {
         title="OWASP Top 10:2025 coverage"
         note="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
       >
-        <div className="grid lg:grid-cols-2 gap-x-10 gap-y-4">
-          <div className="max-w-2xl">
+        {/* A row rather than halves: at 50/50 the note starts at mid-page and
+            drifts away from the bars it refers to as the window widens. */}
+        <div className="flex flex-wrap gap-x-14 gap-y-4 items-start">
+          <div className="min-w-[24rem] max-w-2xl flex-1">
             <BarList rows={mapped} />
           </div>
           {unmapped && (
