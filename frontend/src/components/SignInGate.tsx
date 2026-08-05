@@ -110,10 +110,14 @@ export default function SignInGate() {
 
             {/* The orb, and the way in */}
             <div className="animate-in lg:sticky lg:top-12">
-              <div className="relative mb-8">
-                <OrbitWords />
-                <AsciiOrb />
-                <p className="text-center text-[10px] tracking-widest text-muted/60 mt-3">
+              {/* The outer ring reaches past the orb's own box, so the wrapper is
+                  padded rather than letting it clip at the edges. */}
+              <div className="relative mb-8 px-4 py-6">
+                <div className="relative">
+                  <OrbitWords />
+                  <AsciiOrb />
+                </div>
+                <p className="text-center text-[10px] tracking-widest text-muted/60 mt-5">
                   CLICK TO DISRUPT
                 </p>
               </div>

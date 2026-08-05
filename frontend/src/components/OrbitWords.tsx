@@ -1,82 +1,112 @@
 "use client";
-import { useMemo } from "react";
 
 /**
- * Vulnerability classes orbiting the orb.
+ * Vulnerability classes in orbit around the orb.
  *
- * Two counter-rotating rings. Each word sits on a ring at a fixed angle, and
- * counter-rotates at exactly the ring's rate so it stays upright while travelling
- * -- otherwise the labels tumble and become unreadable, which is the usual failure
- * of orbit effects.
+ * Genuinely three-dimensional, not a circle drawn flat. The rings live in a
+ * preserve-3d context under a perspective, each tilted back on X, and the words
+ * are placed with rotateY + translateZ. So they travel an ellipse, pass BEHIND the
+ * orb, and the browser's own perspective divide makes the near ones larger. A flat
+ * circle at any opacity reads as a halo; this reads as an orbit because the depth
+ * is real.
  *
- * Words at the top of a ring are dimmer than those at the bottom. There is no real
- * depth here, but a constant-opacity ring reads as a flat halo, and the gradient is
- * enough for the eye to accept it as an orbit.
+ * Three transforms have to be undone for a word to stay legible while its ring
+ * turns: the ring's continuous spin, the word's own placement angle, and the ring's
+ * tilt. Each gets its own nesting level, because a CSS animation on `transform`
+ * replaces any static transform on the same element rather than composing with it.
  *
- * Entirely CSS transforms, so the browser can composite it without touching the
- * main thread while the orb next to it is doing real per-frame work.
+ * Opacity is synced to position by negative animation-delay rather than measured in
+ * JavaScript: a word's phase is known from its angle, so the fade can be pinned to
+ * it exactly with no per-frame work.
  */
-
-const INNER = ["SQLi", "XSS", "IDOR", "SSRF", "XXE", "CSRF"];
-const OUTER = ["RCE", "LFI", "SSTI", "JWT", "BOLA", "CORS", "PROTO", "OPEN REDIRECT"];
 
 type Ring = {
   words: string[];
+  /** Radius as a share of the container's smaller dimension. */
   radius: number;
-  duration: number;
+  /** Degrees of backward tilt. 0 would be edge-on, 90 flat to the screen. */
+  tilt: number;
+  seconds: number;
   reverse: boolean;
   size: string;
 };
 
-export default function OrbitWords({ className = "" }: { className?: string }) {
-  const rings = useMemo<Ring[]>(
-    () => [
-      { words: INNER, radius: 38, duration: 38, reverse: false, size: "text-[9px]" },
-      { words: OUTER, radius: 52, duration: 58, reverse: true, size: "text-[8px]" },
-    ],
-    []
-  );
+const RINGS: Ring[] = [
+  {
+    words: ["SQLi", "XSS", "IDOR", "SSRF", "XXE", "CSRF", "RCE"],
+    radius: 64,
+    tilt: 74,
+    seconds: 26,
+    reverse: false,
+    size: "text-[11px]",
+  },
+  {
+    words: ["LFI", "SSTI", "JWT", "BOLA", "CORS", "PROTOTYPE", "OPEN REDIRECT", "PATH TRAVERSAL"],
+    radius: 84,
+    tilt: 79,
+    seconds: 40,
+    reverse: true,
+    size: "text-[10px]",
+  },
+];
 
+export default function OrbitWords({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={`pointer-events-none absolute inset-0 ${className}`}
-      style={{ containerType: "size" } as React.CSSProperties}
+      style={{ perspective: "760px", containerType: "size" } as React.CSSProperties}
     >
-      {rings.map((ring, ri) => (
+      {RINGS.map((ring, ri) => (
         <span
           key={ri}
-          className={ring.reverse ? "orbit-ring-rev" : "orbit-ring"}
-          style={{ animationDuration: `${ring.duration}s` }}
+          className="absolute inset-0"
+          style={{ transformStyle: "preserve-3d", transform: `rotateX(${ring.tilt}deg)` }}
         >
-          {ring.words.map((word, i) => {
-            const angle = (360 / ring.words.length) * i;
-            // Angle 0 is the top of the ring, so dim there and brighten toward
-            // the bottom, which is the half nearer the viewer.
-            const depth = (1 - Math.cos((angle * Math.PI) / 180)) / 2;
-            return (
-              <span
-                key={word}
-                className="absolute left-1/2 top-1/2"
-                style={{
-                  // cqmin resolves against the container, not the word's own box.
-                  transform: `rotate(${angle}deg) translateY(-${ring.radius}cqmin) rotate(${-angle}deg)`,
-                }}
-              >
+          <span
+            className={ring.reverse ? "orbit-spin-rev" : "orbit-spin"}
+            style={{ animationDuration: `${ring.seconds}s`, transformStyle: "preserve-3d" }}
+          >
+            {ring.words.map((word, i) => {
+              const angle = (360 / ring.words.length) * i;
+              // The word reaches the front of the ring at a time fixed by its
+              // angle, so the fade is pinned to it with a negative delay.
+              const phase = -(angle / 360) * ring.seconds;
+              return (
                 <span
-                  className={ring.reverse ? "orbit-counter-rev" : "orbit-counter"}
-                  style={{ animationDuration: `${ring.duration}s` }}
+                  key={word}
+                  className="absolute left-1/2 top-1/2"
+                  style={{
+                    transformStyle: "preserve-3d",
+                    transform: `rotateY(${angle}deg) translateZ(${ring.radius}cqmin)`,
+                  }}
                 >
+                  {/* undo the ring's spin */}
                   <span
-                    className={`block whitespace-nowrap tracking-[0.25em] text-accent ${ring.size}`}
-                    style={{ opacity: 0.16 + depth * 0.4 }}
+                    className={ring.reverse ? "orbit-spin" : "orbit-spin-rev"}
+                    style={{ animationDuration: `${ring.seconds}s`, transformStyle: "preserve-3d" }}
                   >
-                    {word}
+                    {/* undo this word's placement angle and the ring's tilt */}
+                    <span
+                      className="block"
+                      style={{ transform: `rotateY(${-angle}deg) rotateX(${-ring.tilt}deg)` }}
+                    >
+                      <span
+                        className={`orbit-fade block whitespace-nowrap tracking-[0.22em] text-accent ${ring.size}`}
+                        style={{
+                          animationDuration: `${ring.seconds}s`,
+                          animationDelay: `${phase}s`,
+                          textShadow: "0 0 14px rgba(var(--phosphor), 0.55)",
+                        }}
+                      >
+                        {word}
+                      </span>
+                    </span>
                   </span>
                 </span>
-              </span>
-            );
-          })}
+              );
+            })}
+          </span>
         </span>
       ))}
     </span>
