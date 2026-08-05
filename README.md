@@ -127,6 +127,7 @@ non-zero if the engine ever dismisses a real finding.
 - Multi-project workspace with per-user isolation
 - Filterable findings list with expandable detail, inline editing, multi-select bulk actions, and retest recording (outcome, retester, date, evidence, notes) across rounds
 - Export to DOCX, PDF, XLSX, and JSON, enriched with risk, framework, and retest data, over the whole project or a chosen subset of findings
+- A pre-flight check on the export itself: before a report is generated it reports what is about to ship that probably should not — findings a deterministic check contradicted, findings already marked false positive, findings carrying verification flags, findings nobody has adjudicated, and findings with no computed score. Nothing is blocked, since a tester may have good reason to include any of it, but the serious cases require a deliberate acknowledgement rather than a click that could be muscle memory
 - Aggregate dashboard across all projects: severity/status/category breakdowns, risk priorities, OWASP coverage, verification flags, and token usage
 
 **Model configuration**
@@ -337,6 +338,7 @@ Long-running work returns a `job_id` and is polled via `/jobs/{id}`. Jobs run in
 
 **Built-in protections**
 - Per-user data isolation enforced in every query, with finding access authorized through the parent project
+- Row level security enabled on every table with no policies attached. Supabase publishes public-schema tables through PostgREST using the anon key, which is public by design; without this, anyone holding that key could read and write application data directly, bypassing token verification, per-user scoping and the audit trail. The service connects as a role that bypasses RLS and verifies this at startup rather than coming up silently empty
 - Google ID tokens verified against Google's public keys with a mandatory audience check
 - All SQL parameterized
 - User-supplied LLM provider URLs restricted to an allowlist and rejected if they resolve to loopback, private, link-local, or reserved addresses (SSRF protection)
