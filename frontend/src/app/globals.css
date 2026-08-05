@@ -112,6 +112,14 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.9; }
 }
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbitSpinRev {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
 @keyframes blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
@@ -292,6 +300,37 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   @media (prefers-reduced-motion: reduce) {
     html[data-motion="system"] .scan-sweep,
     html[data-motion="system"] .pulse-ring { animation: none; }
+  }
+
+  /* The ring carries the motion; the counter undoes it at the same rate so the
+     word stays upright while it travels. Both must share a duration, which is why
+     it is set inline from one value rather than declared twice here. */
+  .orbit-ring,
+  .orbit-ring-rev {
+    @apply absolute inset-0;
+    animation-name: orbitSpin;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  .orbit-ring-rev { animation-name: orbitSpinRev; }
+  .orbit-counter,
+  .orbit-counter-rev {
+    @apply block;
+    animation-name: orbitSpinRev;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  .orbit-counter-rev { animation-name: orbitSpin; }
+
+  html[data-motion="reduced"] .orbit-ring,
+  html[data-motion="reduced"] .orbit-ring-rev,
+  html[data-motion="reduced"] .orbit-counter,
+  html[data-motion="reduced"] .orbit-counter-rev { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-motion="system"] .orbit-ring,
+    html[data-motion="system"] .orbit-ring-rev,
+    html[data-motion="system"] .orbit-counter,
+    html[data-motion="system"] .orbit-counter-rev { animation: none; }
   }
 
   .caret::after {

@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { motionReduced } from "@/lib/motion";
 
 /**
@@ -165,21 +165,6 @@ export default function AsciiOrb({
     idx: 0,
     mask: new Set<number>(),
   });
-
-  // Ambient terms drifting around the body. Deterministic so they do not jump
-  // between renders, and purely decorative.
-  const ambient = useMemo(
-    () =>
-      words.slice(0, 5).map((w, i) => ({
-        word: w,
-        top: `${12 + hash2(i, 3) * 74}%`,
-        left: `${hash2(i, 9) > 0.5 ? 4 + hash2(i, 1) * 22 : 74 + hash2(i, 2) * 20}%`,
-        rot: Math.round((hash2(i, 7) - 0.5) * 130),
-        delay: `${(i * 1.7).toFixed(1)}s`,
-        dur: `${(11 + hash2(i, 5) * 8).toFixed(1)}s`,
-      })),
-    [words]
-  );
 
   const strike = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     const s = st.current;
@@ -416,27 +401,6 @@ export default function AsciiOrb({
         interactive ? "cursor-crosshair" : "cursor-default pointer-events-none"
       } ${className}`}
     >
-      {/* Ambient terms, drifting. Decorative and non-interactive. */}
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        {interactive && ambient.map((a, i) => (
-          <span
-            key={i}
-            className="orb-drift absolute text-[9px] tracking-[0.3em] text-accent/25"
-            style={
-              {
-                top: a.top,
-                left: a.left,
-                "--rot": `${a.rot}deg`,
-                animationDelay: a.delay,
-                animationDuration: a.dur,
-              } as React.CSSProperties
-            }
-          >
-            {a.word}
-          </span>
-        ))}
-      </span>
-
       <span ref={wrapRef} className="orb-float relative block">
         <span
           ref={haloRef}
