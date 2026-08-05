@@ -64,6 +64,8 @@ const DEFAULT_WORDS = [
 ];
 
 const BREAK_MS = 1900;
+/** Degrees either side of baseHue the colour is allowed to drift. */
+const HUE_SWING = 14;
 const FOCAL = 2.6;   // camera distance; smaller is a wider, more dramatic perspective
 
 function hash2(x: number, y: number): number {
@@ -200,7 +202,11 @@ export default function AsciiOrb({
       // Shape: the exponent breathes between an octahedron and a sphere.
       const n = 1.08 + (Math.sin(t * 0.5) * 0.5 + 0.5) * 1.05;
       const nm1 = n - 1;
-      const hue = hueCycle && !reduced ? (baseHue + t * 18) % 360 : baseHue;
+      // Oscillate within a narrow band rather than sweeping the wheel. The old
+      // (baseHue + t * 18) % 360 spent most of its cycle in magenta and blue --
+      // colours that appear nowhere else in the interface. A slow drift of a few
+      // degrees keeps it alive without leaving the palette.
+      const hue = hueCycle && !reduced ? baseHue + Math.sin(t * 0.22) * HUE_SWING : baseHue;
 
       // Tumble. R = Rx(ax) . Ry(ay), built once per frame and applied inline.
       const ay = t * 0.55, ax = t * 0.31;
@@ -352,7 +358,7 @@ export default function AsciiOrb({
 
       if (baseRef.current) {
         baseRef.current.textContent = text;
-        baseRef.current.style.color = `hsl(${hue} 70% 62%)`;
+        baseRef.current.style.color = `hsl(${hue} 78% 64%)`;
       }
       if (aRef.current) {
         aRef.current.textContent = text;

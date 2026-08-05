@@ -110,49 +110,55 @@ export default function SignInGate() {
 
             {/* The orb, and the way in */}
             <div className="animate-in lg:sticky lg:top-12">
-              {/* The outer ring reaches past the orb's own box, so the wrapper is
-                  padded rather than letting it clip at the edges. */}
-              <div className="relative mb-8 px-4 py-6">
+              {/* The orb is inset so the orbit has somewhere to go. At full width
+                  its sphere fills the box and leaves a band of only ~14% for the
+                  rings, which is why they had nowhere to sit without either
+                  crossing the body or bleeding out of the column. */}
+              <div className="relative mb-10 py-4">
                 <div className="relative">
                   <OrbitWords />
-                  <AsciiOrb />
+                  <div className="mx-auto w-[68%]">
+                    <AsciiOrb />
+                  </div>
                 </div>
-                <p className="text-center text-[10px] tracking-widest text-muted/60 mt-5">
+                <p className="text-center text-[10px] tracking-widest text-muted/60 mt-6">
                   CLICK TO DISRUPT
                 </p>
               </div>
 
-              <div className="glass rounded-xl p-7">
-                <h2 className="text-[11px] tracking-widest text-muted mb-4">
+              {/* No card. A bordered panel here read as a separate object dropped
+                  onto the page -- the one heavy box on a layout built from rules and
+                  whitespace. The section rule is the same device every other page
+                  uses, so the sign-in belongs to the design instead of interrupting
+                  it. */}
+              <div className="flex items-baseline gap-3 border-b border-border pb-1.5 mb-4">
+                <h2 className="text-[11px] tracking-widest text-muted">
                   <span className="text-accent">&gt;</span> GET STARTED
                 </h2>
-                <p className="text-muted text-sm mb-6 leading-relaxed">
-                  Sign in to create a project and start analyzing. Projects and findings are private
-                  to your account, and you can run on the shared demo key before adding your own.
-                </p>
-                <button
-                  className="btn btn-icon w-full flex items-center justify-center gap-2"
-                  onClick={() => signIn("google")}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.4-1.6 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.9 3.6 14.76 2.7 12.18 2.7 6.98 2.7 2.7 6.98 2.7 12.18s4.28 9.48 9.48 9.48c5.47 0 9.1-3.85 9.1-9.27 0-.62-.07-1.1-.17-1.29z"
-                    />
-                  </svg>
-                  Sign in with Google
-                </button>
-                <p className="text-xs text-muted mt-4 leading-relaxed">
-                  Google is used only to sign you in. Nothing is posted on your behalf.
-                </p>
-
-                <div className="mt-6 pt-6 border-t border-border/60">
-                  <GithubButton full label="VIEW SOURCE ON GITHUB" />
-                  <p className="text-[11px] text-muted mt-2.5 text-center">
-                    MIT licensed. Read the code without signing in.
-                  </p>
-                </div>
               </div>
+
+              <button
+                className="btn btn-icon w-full flex items-center justify-center gap-2 py-2.5"
+                onClick={() => signIn("google")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.4-1.6 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.9 3.6 14.76 2.7 12.18 2.7 6.98 2.7 2.7 6.98 2.7 12.18s4.28 9.48 9.48 9.48c5.47 0 9.1-3.85 9.1-9.27 0-.62-.07-1.1-.17-1.29z"
+                  />
+                </svg>
+                Sign in with Google
+              </button>
+
+              <div className="mt-2.5">
+                <GithubButton full label="VIEW SOURCE ON GITHUB" />
+              </div>
+
+              <p className="text-xs text-muted mt-4 leading-relaxed">
+                Projects and findings are private to your account. Google is used only to sign you
+                in, and nothing is posted on your behalf. The source is MIT licensed and readable
+                without an account.
+              </p>
 
               <p className="text-xs text-muted mt-6 leading-relaxed">
                 For authorized security testing only. This deployment is a demonstration &mdash; use
