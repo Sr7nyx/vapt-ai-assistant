@@ -189,23 +189,38 @@ def init():
             # that does NOT bypass RLS sees zero rows in every table -- the app
             # would come up looking empty rather than broken, which is the worst
             # way for this to fail. Better to refuse to start and say why.
-            cur.execute(
-                "SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user"
-            )
-            row = cur.fetchone()
-            privileged = bool(row and (row[0] or row[1]))
+            # The pool sets row_factory=dict_row, so rows come back as mappings and
+            # must be read by column name. Wrapped because a role without access to
+            # pg_roles should degrade to "assume not privileged" rather than stop
+            # the service from starting at all.
+            role_name, privileged = "unknown", False
+            try:
+                cur.execute(
+                    """
+                    SELECT current_user AS role_name, rolbypassrls, rolsuper
+                    FROM pg_roles WHERE rolname = current_user
+                    """
+                )
+                row = cur.fetchone() or {}
+                role_name = str(row.get("role_name") or "unknown")
+                privileged = bool(row.get("rolbypassrls") or row.get("rolsuper"))
+            except Exception as exc:
+                conn.rollback()
+                print(f"[pg_store] note: could not determine RLS privileges: {exc}")
 
+            warned = False
             for statement in SCHEMA_STATEMENTS:
                 if not privileged and _touches_rls(statement):
                     # Leave RLS alone rather than locking the app out of its own
-                    # data. Surfaced loudly so it is fixed deliberately.
-                    print(
-                        "[pg_store] WARNING: the database role "
-                        f"'{row[0] if row else 'unknown'}' does not bypass RLS, so row "
-                        "level security was NOT enabled. The Supabase REST API may be "
-                        "able to read these tables. Connect as a role with BYPASSRLS "
-                        "and restart."
-                    )
+                    # data. Surfaced once, loudly, so it is fixed deliberately.
+                    if not warned:
+                        warned = True
+                        print(
+                            f"[pg_store] WARNING: database role '{role_name}' does not "
+                            "bypass RLS, so row level security was NOT enabled. The "
+                            "Supabase REST API may be able to read these tables. "
+                            "Connect as a role with BYPASSRLS and restart."
+                        )
                     continue
                 try:
                     cur.execute(statement)
