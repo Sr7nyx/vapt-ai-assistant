@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Job } from "@/lib/types";
 import JobLog from "./JobLog";
-import { phaseOf } from "./ScanOverlay";
+import ScanOverlay, { phaseOf } from "./ScanOverlay";
 
 /**
  * The running job, brought to the middle of the screen.
@@ -35,11 +35,15 @@ const PHASE_TONE: Record<string, string> = {
 export default function JobConsole({
   job,
   title = "Analysis",
+  evidence,
   resultCount,
   onDismiss,
 }: {
   job: Job | null;
   title?: string;
+  /** The material being worked through. Shown under the sweep so the panel says
+   *  what is being read, not merely that something is. */
+  evidence?: string;
   /** Shown once the job finishes, so the panel closes on a fact rather than a shrug. */
   resultCount?: number;
   onDismiss?: () => void;
@@ -139,7 +143,27 @@ export default function JobConsole({
           />
         </div>
 
-        <div className="p-4">
+        <div className="p-4 grid gap-4">
+          {/* The evidence under the sweep. Previously this lived on the textarea,
+              where the console's own backdrop covered it the moment the panel
+              opened -- the most descriptive visual on the page was hidden exactly
+              when it was being looked at. */}
+          {!done && evidence && evidence.trim().length > 0 && (
+            <div className="relative rounded-lg border border-border/60 overflow-hidden">
+              <pre className="max-h-40 overflow-hidden px-3 py-2 text-[10px] leading-relaxed font-mono text-muted/70 whitespace-pre-wrap break-words select-none">
+                {evidence.slice(0, 1400)}
+              </pre>
+              <ScanOverlay active progress={job.progress ?? 0} done={false} />
+              {/* Fades the excerpt out at the bottom rather than cutting it mid-line,
+                  which would read as a rendering fault. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
+                style={{ background: "linear-gradient(to top, #1a251e, transparent)" }}
+              />
+            </div>
+          )}
+
           <JobLog job={job} />
 
           {failed && (

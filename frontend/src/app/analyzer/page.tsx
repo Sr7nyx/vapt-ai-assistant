@@ -426,7 +426,12 @@ export default function AnalyzerPage() {
 
       {/* At the root: an overlay must not live inside a branch that can unmount
           while its job is still running. */}
-      <JobConsole job={job} title="Analysis" resultCount={results.length} />
+      <JobConsole
+        job={job}
+        title="Analysis"
+        evidence={combinedInput()}
+        resultCount={results.length}
+      />
     </div>
   );
 }

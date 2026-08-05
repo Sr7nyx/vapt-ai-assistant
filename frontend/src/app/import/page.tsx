@@ -338,7 +338,12 @@ export default function ImportPage() {
 
       {/* At the component root: an overlay nested in a conditional branch
           unmounts when that branch does, which would take the panel down mid-run. */}
-      <JobConsole job={job} title="Triage" resultCount={effective.length} />
+      <JobConsole
+        job={job}
+        title="Triage"
+        evidence={candidates.map((c) => `${c.severity ?? ""}  ${c.title ?? ""}`).join("\n")}
+        resultCount={effective.length}
+      />
     </div>
   );
 }
