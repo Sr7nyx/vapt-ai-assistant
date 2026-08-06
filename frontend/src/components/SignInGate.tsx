@@ -1,8 +1,7 @@
 "use client";
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
-import ShaderOrb from "./ShaderOrb";
-import OrbitRings from "./OrbitRings";
+import ReactiveOrb from "./ReactiveOrb";
 import { GithubButton, SourceFooter } from "./SourceLinks";
 
 /**
@@ -101,14 +100,27 @@ export default function SignInGate() {
                   rings, which is why they had nowhere to sit without either
                   crossing the body or bleeding out of the column. */}
               <div className="relative mb-10 py-4">
-                <div className="relative">
-                  <OrbitRings />
-                  <div className="mx-auto w-[62%]">
-                    <ShaderOrb />
-                  </div>
-                </div>
-                <p className="text-center text-[10px] tracking-widest text-muted/60 mt-6">
+                {/* No container: the orb sits on the page background, and the
+                    belts are free to reach past where a card's edge would have
+                    been. */}
+                <ReactiveOrb className="mx-auto max-w-[480px]" />
+                <p className="group text-center text-[10px] tracking-[0.25em] text-muted/70 mt-2 transition-colors hover:text-accent">
                   CLICK TO DISRUPT
+                  <svg
+                    aria-hidden="true"
+                    width="9"
+                    height="12"
+                    viewBox="0 0 9 12"
+                    className="inline-block ml-2 -mb-0.5 opacity-60"
+                  >
+                    <path
+                      d="M4.5 0v9M1 6l3.5 3.5L8 6"
+                      stroke="currentColor"
+                      strokeWidth="1.1"
+                      fill="none"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </p>
               </div>
 

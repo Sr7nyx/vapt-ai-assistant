@@ -104,21 +104,6 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.9; }
 }
-@keyframes orbitSpinY {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(360deg); }
-}
-@keyframes orbitSpinYRev {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(-360deg); }
-}
-/* Peaks at the front of the ring, troughs at the back. Paired with a negative
-   delay derived from each word's angle, so brightness tracks real position. */
-@keyframes orbitFade {
-  0%   { opacity: 0.95; }
-  50%  { opacity: 0.14; }
-  100% { opacity: 0.95; }
-}
 @keyframes floatIn {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
@@ -293,30 +278,7 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
     html[data-motion="system"] .pulse-ring { animation: none; }
   }
 
-  .orbit-spin,
-  .orbit-spin-rev {
-    @apply absolute inset-0;
-    animation-name: orbitSpinY;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-  }
-  .orbit-spin-rev { animation-name: orbitSpinYRev; }
-  .orbit-fade {
-    animation-name: orbitFade;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-  }
 
-  /* Stopped, the rings still read: the tilt and perspective place the words on an
-     ellipse, so it is a static orbit rather than a broken one. */
-  html[data-motion="reduced"] .orbit-spin,
-  html[data-motion="reduced"] .orbit-spin-rev,
-  html[data-motion="reduced"] .orbit-fade { animation: none; }
-  @media (prefers-reduced-motion: reduce) {
-    html[data-motion="system"] .orbit-spin,
-    html[data-motion="system"] .orbit-spin-rev,
-    html[data-motion="system"] .orbit-fade { animation: none; }
-  }
 
   /* Entrance for content that should arrive rather than appear. backwards fill so
      a delayed element is hidden until its turn instead of flashing first. */

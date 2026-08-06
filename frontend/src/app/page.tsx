@@ -8,7 +8,7 @@ import { sevClass } from "@/components/Severity";
 import { SeverityBar, BarList } from "@/components/Charts";
 import { swr, readCache } from "@/lib/cache";
 import { Section, Figure } from "@/components/Terminal";
-import ShaderOrb from "@/components/ShaderOrb";
+import ReactiveOrb from "@/components/ReactiveOrb";
 
 /**
  * Overview.
@@ -87,7 +87,7 @@ export default function Dashboard() {
           <SeverityBar rows={data.by_severity} />
         </Section>
         <div className="hidden md:block w-40 -mt-2 opacity-70">
-          <ShaderOrb interactive={false} />
+          <ReactiveOrb showLabels={false} />
         </div>
       </div>
 
