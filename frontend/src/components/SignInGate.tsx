@@ -103,7 +103,7 @@ export default function SignInGate() {
                 {/* No container: the orb sits on the page background, and the
                     belts are free to reach past where a card's edge would have
                     been. */}
-                <ReactiveOrb className="mx-auto max-w-[480px]" />
+                <ReactiveOrb className="mx-auto max-w-[380px]" />
                 <p className="group text-center text-[10px] tracking-[0.25em] text-muted/70 mt-2 transition-colors hover:text-accent">
                   CLICK TO DISRUPT
                   <svg

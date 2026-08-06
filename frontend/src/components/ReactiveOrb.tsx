@@ -121,7 +121,16 @@ export default function ReactiveOrb({
 
     const reduced = motionReduced();
     const narrow = window.innerWidth < 640;
-    const COUNT = narrow ? 2600 : 6200;
+
+    // Density is what makes a point cloud read as a sphere, and density is a
+    // function of the RENDERED size, not the viewport. At 160px, 6,200 particles
+    // overlap into a solid disc; roughly one particle per 28 square pixels holds
+    // the same look at any size.
+    const box = Math.max(120, wrap.clientWidth || 320);
+    const COUNT = Math.round(
+      Math.min(narrow ? 2600 : 6400, Math.max(700, (box * box) / 28))
+    );
+    const smallBadge = box < 220;
 
     // --- buffers, built once -------------------------------------------------
     const base = fibonacciSphere(COUNT);
@@ -137,7 +146,7 @@ export default function ReactiveOrb({
     gl.bindBuffer(gl.ARRAY_BUFFER, seedBuf);
     gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
 
-    const PER_RING = narrow ? 150 : 260;
+    const PER_RING = smallBadge ? 90 : narrow ? 150 : 260;
     const rt = new Float32Array(PER_RING * RINGS.length);
     const rIdx = new Float32Array(PER_RING * RINGS.length);
     for (let r = 0; r < RINGS.length; r++) {
@@ -202,7 +211,7 @@ export default function ReactiveOrb({
       mx: 0, my: 0, tmx: 0, tmy: 0,
       hover: 0, tHover: 0,
       shock: 0, dir: [0, 0, 1] as Vec3,
-      spin: 0, visible: true,
+      spin: 0, visible: true, onScreen: true,
     };
 
     const onMove = (e: PointerEvent) => {
@@ -229,8 +238,17 @@ export default function ReactiveOrb({
     wrap.addEventListener("pointerleave", onLeave);
     wrap.addEventListener("pointerdown", onDown);
 
-    const onVis = () => { st.visible = !document.hidden; };
+    const onVis = () => { st.visible = !document.hidden && st.onScreen; };
     document.addEventListener("visibilitychange", onVis);
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        st.onScreen = entry.isIntersecting;
+        st.visible = !document.hidden && st.onScreen;
+      },
+      { threshold: 0.01 }
+    );
+    io.observe(wrap);
 
     // --- frame ---------------------------------------------------------------
     let raf = 0;
@@ -303,7 +321,8 @@ export default function ReactiveOrb({
       gl.uniform3fv(su.dir, st.dir);
       gl.uniform1f(su.hover, st.hover);
       gl.uniform1f(su.dpr, dpr);
-      gl.uniform1f(su.size, narrow ? 1.6 : 2.0);
+      // Point size follows the box too, or a small orb becomes a coarse stipple.
+      gl.uniform1f(su.size, Math.max(1.0, Math.min(2.1, box / 230)));
       gl.uniform1f(su.calm, calm);
       gl.uniform3fv(su.lime, PALETTE.lime);
       gl.uniform3fv(su.green, PALETTE.green);
@@ -352,6 +371,7 @@ export default function ReactiveOrb({
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
       wrap.removeEventListener("pointermove", onMove);
       wrap.removeEventListener("pointerenter", onEnter);
       wrap.removeEventListener("pointerleave", onLeave);

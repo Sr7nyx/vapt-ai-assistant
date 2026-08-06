@@ -86,7 +86,9 @@ export default function Dashboard() {
         <Section title="Severity">
           <SeverityBar rows={data.by_severity} />
         </Section>
-        <div className="hidden md:block w-40 -mt-2 opacity-70">
+        {/* Decorative only: no labels, and the particle count scales itself down
+            to this box so it stays a sphere rather than a solid disc. */}
+        <div className="hidden lg:block w-44 shrink-0 -mt-4 opacity-80">
           <ReactiveOrb showLabels={false} />
         </div>
       </div>
