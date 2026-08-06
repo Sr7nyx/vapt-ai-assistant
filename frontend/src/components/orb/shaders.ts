@@ -156,9 +156,9 @@ void main() {
   col = mix(col, u_lime, smoothstep(0.62, 1.05, v_energy * v_depth));
 
   // Rear particles stay dark, which is what gives the cloud its volume.
-  float a = mask * (0.06 + pow(v_depth, 1.7) * 0.85);
-  a *= 0.75 + v_seed * 0.5;
-  a *= 1.0 + u_hover * 0.22;
+  float a = mask * (0.14 + pow(v_depth, 1.45) * 0.95);
+  a *= 0.85 + v_seed * 0.5;
+  a *= 1.08 + u_hover * 0.28; 
 
   gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
 }
