@@ -181,3 +181,78 @@ export function ringFrame(basisA: Vec3, basisB: Vec3, ang: number) {
   ];
   return { radial, tangent };
 }
+
+
+/* --- severity colouring ------------------------------------------------------
+ *
+ * The dashboard orb reports the project's severity mix rather than decorating the
+ * page: each particle takes the colour of a severity, in proportion to the real
+ * counts. So a project that is mostly Critical looks it, at a glance, from across
+ * the room.
+ */
+
+/** The same values the severity bar and the findings table use. */
+export const SEVERITY_RGB: Record<string, Vec3> = {
+  Critical: [0.878, 0.424, 0.459],
+  High: [0.898, 0.627, 0.298],
+  Medium: [0.373, 0.702, 0.675],
+  Low: [0.361, 0.420, 0.478],
+  Informational: [0.239, 0.282, 0.329],
+};
+export const SEVERITY_ORDER = ["Critical", "High", "Medium", "Low", "Informational"];
+
+/** Cheap, stable, smooth-ish scalar field. Deterministic, so the same project
+ *  always produces the same arrangement rather than reshuffling on every render. */
+function patchField(x: number, y: number, z: number): number {
+  const a = Math.sin(x * 2.7 + 1.3) * Math.cos(y * 2.1 - 0.7);
+  const b = Math.sin(z * 3.1 - 2.2) * Math.cos(x * 1.7 + 0.4);
+  const c = Math.sin(y * 3.6 + 0.9) * Math.cos(z * 2.4 + 1.8);
+  return (a + b + c) / 3;
+}
+
+/**
+ * A colour per particle, in proportion to the severity counts.
+ *
+ * Particles are sorted by a smooth field and then handed out in severity order, so
+ * each severity occupies a contiguous REGION of the sphere. Assigning at random
+ * would be proportionally identical and visually useless -- at a few thousand
+ * points it reads as grey noise, and the whole purpose is to see the mix.
+ */
+export function severityColours(
+  positions: Float32Array,
+  counts: { label: string; count: number }[]
+): Float32Array {
+  const n = positions.length / 3;
+  const out = new Float32Array(n * 3);
+
+  const present = SEVERITY_ORDER.map((label) => ({
+    label,
+    count: counts.find((c) => c.label === label)?.count ?? 0,
+  })).filter((c) => c.count > 0);
+
+  if (present.length === 0) {
+    const fallback = SEVERITY_RGB.Medium;
+    for (let i = 0; i < n; i++) out.set(fallback, i * 3);
+    return out;
+  }
+
+  const order = new Array(n);
+  for (let i = 0; i < n; i++) {
+    order[i] = { i, v: patchField(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]) };
+  }
+  order.sort((p, q) => p.v - q.v);
+
+  const total = present.reduce((s, c) => s + c.count, 0);
+  let cursor = 0;
+  present.forEach((sev, k) => {
+    // The last severity absorbs the rounding remainder, so every particle is
+    // coloured and the proportions still add up.
+    const share =
+      k === present.length - 1 ? n - cursor : Math.round((sev.count / total) * n);
+    const rgb = SEVERITY_RGB[sev.label] ?? SEVERITY_RGB.Medium;
+    for (let j = 0; j < share && cursor < n; j++, cursor++) {
+      out.set(rgb, order[cursor].i * 3);
+    }
+  });
+  return out;
+}

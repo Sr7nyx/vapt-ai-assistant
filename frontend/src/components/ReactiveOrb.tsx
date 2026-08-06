@@ -6,7 +6,7 @@ import {
 } from "./orb/shaders";
 import {
   CAM_DIST, FOCAL, Mat3, Vec3, apply, fibonacciSphere, mul, occlusion, ringBasis, rotX, rotY,
-  planeMatrix, ringFrame,
+  planeMatrix, ringFrame, severityColours,
 } from "./orb/geometry";
 
 /**
@@ -78,16 +78,32 @@ function link(gl: WebGLRenderingContext, vs: string, fs: string) {
 export default function ReactiveOrb({
   className = "",
   showLabels = true,
+  severity,
 }: {
   className?: string;
   /** Off for small decorative instances, where the belts are legible but the
    *  words would not be. */
   showLabels?: boolean;
+  /**
+   * Finding counts by severity. When given, particles take the colour of a
+   * severity in proportion to the real counts, and the orb reports the project's
+   * risk mix instead of decorating the page.
+   */
+  severity?: { label: string; count: number }[];
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
   const [failed, setFailed] = useState(false);
+
+  // A stable signature of the mix. The effect depends on this rather than on the
+  // array itself, so the context is rebuilt only when the numbers actually change.
+  const sevKey = useMemo(
+    () => (severity ?? []).map((c) => `${c.label}:${c.count}`).join("|"),
+    [severity]
+  );
+  const sevRef = useRef(severity);
+  sevRef.current = severity;
 
   const labels = useMemo<Label[]>(() => {
     const out: Label[] = [];
@@ -139,12 +155,32 @@ export default function ReactiveOrb({
       seeds[i * 2] = Math.random();
       seeds[i * 2 + 1] = Math.random();
     }
+    // Every particle carries its own colour, so the shader needs no mode switch.
+    // Without severity data the tints are the phosphor gradient with per-particle
+    // variation; with it, they are the severity mix.
+    const sev = sevRef.current;
+    const tints = sev?.length
+      ? severityColours(base, sev)
+      : (() => {
+          const t = new Float32Array(COUNT * 3);
+          for (let i = 0; i < COUNT; i++) {
+            const k = Math.random();
+            const c =
+              k > 0.86 ? PALETTE.lime : k > 0.38 ? PALETTE.green : PALETTE.emerald;
+            t.set(c, i * 3);
+          }
+          return t;
+        })();
+
     const posBuf = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
     gl.bufferData(gl.ARRAY_BUFFER, base, gl.STATIC_DRAW);
     const seedBuf = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, seedBuf);
     gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+    const tintBuf = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, tintBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, tints, gl.STATIC_DRAW);
 
     const PER_RING = smallBadge ? 90 : narrow ? 150 : 260;
     const rt = new Float32Array(PER_RING * RINGS.length);
@@ -171,7 +207,6 @@ export default function ReactiveOrb({
       cam: U(sphereProg, "u_camDist"), foc: U(sphereProg, "u_focal"), shock: U(sphereProg, "u_shock"),
       dir: U(sphereProg, "u_shockDir"), hover: U(sphereProg, "u_hover"), dpr: U(sphereProg, "u_dpr"),
       size: U(sphereProg, "u_pointScale"), calm: U(sphereProg, "u_calm"),
-      lime: U(sphereProg, "u_lime"), green: U(sphereProg, "u_green"), emerald: U(sphereProg, "u_emerald"),
     };
     const ru = {
       rot: U(ringProg, "u_rot"), time: U(ringProg, "u_time"), res: U(ringProg, "u_res"),
@@ -324,9 +359,6 @@ export default function ReactiveOrb({
       // Point size follows the box too, or a small orb becomes a coarse stipple.
       gl.uniform1f(su.size, Math.max(1.0, Math.min(2.1, box / 230)));
       gl.uniform1f(su.calm, calm);
-      gl.uniform3fv(su.lime, PALETTE.lime);
-      gl.uniform3fv(su.green, PALETTE.green);
-      gl.uniform3fv(su.emerald, PALETTE.emerald);
       const ap = gl.getAttribLocation(sphereProg, "a_pos");
       const as = gl.getAttribLocation(sphereProg, "a_seed");
       gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
@@ -335,6 +367,10 @@ export default function ReactiveOrb({
       gl.bindBuffer(gl.ARRAY_BUFFER, seedBuf);
       gl.enableVertexAttribArray(as);
       gl.vertexAttribPointer(as, 2, gl.FLOAT, false, 0, 0);
+      const ac = gl.getAttribLocation(sphereProg, "a_tint");
+      gl.bindBuffer(gl.ARRAY_BUFFER, tintBuf);
+      gl.enableVertexAttribArray(ac);
+      gl.vertexAttribPointer(ac, 3, gl.FLOAT, false, 0, 0);
       gl.drawArrays(gl.POINTS, 0, COUNT);
 
       // --- labels, from the same matrix -------------------------------------
@@ -379,13 +415,14 @@ export default function ReactiveOrb({
       document.removeEventListener("visibilitychange", onVis);
       gl.deleteBuffer(posBuf);
       gl.deleteBuffer(seedBuf);
+      gl.deleteBuffer(tintBuf);
       gl.deleteBuffer(rtBuf);
       gl.deleteBuffer(riBuf);
       gl.deleteProgram(sphereProg);
       gl.deleteProgram(ringProg);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [labels]);
+  }, [labels, sevKey]);
 
   return (
     <div

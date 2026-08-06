@@ -86,10 +86,12 @@ export default function Dashboard() {
         <Section title="Severity">
           <SeverityBar rows={data.by_severity} />
         </Section>
-        {/* Decorative only: no labels, and the particle count scales itself down
-            to this box so it stays a sphere rather than a solid disc. */}
-        <div className="hidden lg:block w-44 shrink-0 -mt-4 opacity-80">
-          <ReactiveOrb showLabels={false} />
+        {/* Not decoration: the particles take severity colours in proportion to
+            the real counts, so the orb shows the shape of the project's risk. It
+            sits beside the severity bar because it is the same fact, read a
+            different way. */}
+        <div className="hidden lg:block w-48 shrink-0 -mt-4" title="Particle colour reflects the severity mix">
+          <ReactiveOrb showLabels={false} severity={data.by_severity} />
         </div>
       </div>
 

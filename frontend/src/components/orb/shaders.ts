@@ -80,6 +80,8 @@ export const SPHERE_VERT = `
 precision highp float;
 attribute vec3  a_pos;      // unit-sphere position
 attribute vec2  a_seed;     // per-particle randomness
+attribute vec3  a_tint;     // severity colour, when the orb is reporting one
+attribute vec3  a_tint;     // this particle's colour (severity mix, or theme green)
 
 uniform float u_time;
 uniform float u_shock;      // 0..1, decays after a click
@@ -95,8 +97,10 @@ ${PROJECT}
 varying float v_depth;
 varying float v_energy;
 varying float v_seed;
+varying vec3  v_tint;
 
 void main() {
+  v_tint = a_tint;
   vec3 dir = normalize(a_pos);
 
   // Layered noise: a slow swell, and a finer band that drifts the other way.
@@ -124,6 +128,7 @@ void main() {
   v_depth  = clamp((u_camDist + 1.0 - eyeZ) / 2.0, 0.0, 1.0);   // 1 front, 0 back
   v_energy = clamp(n2 * 0.5 + 0.5, 0.0, 1.0) + wave * 1.6;
   v_seed   = a_seed.x;
+  v_tint   = a_tint;
 
   // Nearer particles are larger. Sizes are in device pixels, hence u_dpr.
   float size = u_pointScale * (0.55 + v_depth * 0.9) * (0.7 + a_seed.y * 0.6);
@@ -134,14 +139,12 @@ void main() {
 export const SPHERE_FRAG = `
 precision highp float;
 
-uniform vec3  u_lime;      // bright phosphor
-uniform vec3  u_green;     // primary
-uniform vec3  u_emerald;   // deep
 uniform float u_hover;
 
 varying float v_depth;
 varying float v_energy;
 varying float v_seed;
+varying vec3  v_tint;
 
 void main() {
   // Round the point and soften its edge; a square particle reads as a bug.
@@ -150,14 +153,19 @@ void main() {
   float mask = smoothstep(1.0, 0.35, r);
   if (mask <= 0.003) discard;
 
-  // Deep emerald at the back, primary green through the body, lime only on the
-  // most energetic front-facing particles. Never a white highlight.
-  vec3 col = mix(u_emerald, u_green, smoothstep(0.15, 0.75, v_depth));
-  col = mix(col, u_lime, smoothstep(0.62, 1.05, v_energy * v_depth));
+  // Each particle carries its own colour. When the orb is showing a severity
+  // mix that is the finding's band; otherwise it is the theme green, and the
+  // shading below is identical either way.
+  vec3 deep = v_tint * 0.28;
+  vec3 col = mix(deep, v_tint, smoothstep(0.10, 0.72, v_depth));
+  // The energetic front-facing particles brighten toward their own hue rather
+  // than toward white, so a red particle never flares pink.
+  col = mix(col, min(v_tint * 1.9, vec3(1.0)), smoothstep(0.62, 1.05, v_energy * v_depth));
 
-  // Rear particles stay dark, which is what gives the cloud its volume.
-  float a = mask * (0.06 + pow(v_depth, 1.7) * 0.85);
-  a *= 0.75 + v_seed * 0.5;
+  // Rear particles stay dim, which is what gives the cloud its volume -- but not
+  // so dim that a small instance reads as empty.
+  float a = mask * (0.14 + pow(v_depth, 1.5) * 0.86);
+  a *= 0.78 + v_seed * 0.44;
   a *= 1.0 + u_hover * 0.22;
 
   gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
