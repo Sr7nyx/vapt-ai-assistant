@@ -5,7 +5,8 @@ import {
   SPHERE_VERT, SPHERE_FRAG, RING_VERT, RING_FRAG,
 } from "./orb/shaders";
 import {
-  CAM_DIST, FOCAL, Mat3, Vec3, apply, fibonacciSphere, mul, occlusion, project, ringBasis, rotX, rotY,
+  CAM_DIST, FOCAL, Mat3, Vec3, apply, fibonacciSphere, mul, occlusion, ringBasis, rotX, rotY,
+  planeMatrix, ringFrame,
 } from "./orb/geometry";
 
 /**
@@ -326,19 +327,21 @@ export default function ReactiveOrb({
         const spin = time * ring.speed * calm + st.shock * 0.5;
         const ang = L.t * Math.PI * 2 + spin;
         const rr = ring.radius * (1 + st.shock * 0.03);
-        const local: Vec3 = [
-          (b.a[0] * Math.cos(ang) + b.b[0] * Math.sin(ang)) * rr,
-          (b.a[1] * Math.cos(ang) + b.b[1] * Math.sin(ang)) * rr,
-          (b.a[2] * Math.cos(ang) + b.b[2] * Math.sin(ang)) * rr,
-        ];
+        const { radial, tangent } = ringFrame(b.a, b.b, ang);
+        const local: Vec3 = [radial[0] * rr, radial[1] * rr, radial[2] * rr];
+
+        // Laid INTO the ring's plane rather than stood upright at a point on it.
+        const m = planeMatrix(local, tangent, radial, rot, W, H);
         const p = apply(rot, local);
-        const s = project(p, W, H);
         const vis = occlusion(p);
-        // Front-facing is brighter and fully opaque; the sides dim; behind the
-        // cloud it goes.
         const front = (p[2] + rr) / (2 * rr);
-        const alpha = vis * (0.2 + front * 0.8);
-        el.style.transform = `translate3d(${s.x}px, ${s.y}px, 0) translate(-50%, -50%)`;
+        const alpha = vis * (0.18 + front * 0.82);
+
+        // matrix() maps the label's own box through the plane, so perspective
+        // squashes the far side exactly as it squashes the ring itself.
+        el.style.transform =
+          `translate(${m.x}px, ${m.y}px) matrix(${m.a.toFixed(4)}, ${m.b.toFixed(4)}, ` +
+          `${m.c.toFixed(4)}, ${m.d.toFixed(4)}, 0, 0) translate(-50%, -50%)`;
         el.style.opacity = alpha.toFixed(3);
         el.style.color = front > 0.72 ? "#B8FF45" : front > 0.4 ? "#75F28A" : "#688574";
         el.style.zIndex = p[2] > 0 ? "2" : "0";

@@ -13,6 +13,9 @@
 export type Mat3 = [number, number, number, number, number, number, number, number, number];
 export type Vec3 = [number, number, number];
 
+/** Floor on how flat a label may be squashed before it stops being legible. */
+export const MIN_GLYPH_HEIGHT = 0.38;
+
 export const CAM_DIST = 3.25;
 export const FOCAL = 2.05;
 
@@ -99,4 +102,82 @@ export function fibonacciSphere(count: number): Float32Array {
     out[i * 3 + 2] = Math.sin(th) * r;
   }
   return out;
+}
+
+
+/**
+ * The 2D transform that lays a label flat INTO its ring's plane.
+ *
+ * An upright label positioned at a ring point reads as a tag floating nearby, not
+ * as part of the ring. To belong to the band it has to lie in the band: baseline
+ * running along the ring's tangent, its own "up" pointing outward along the radius,
+ * and both foreshortening as the plane tilts away from the viewer -- the way a rock
+ * in Saturn's rings sits in the plane rather than standing on it.
+ *
+ * So instead of a rotation, we project three nearby points -- the label's position,
+ * a step along the tangent, and a step along the radius -- and build the affine
+ * matrix that maps text space onto the plane the projection produced. Perspective
+ * then comes out for free: the far side of a ring is genuinely smaller and flatter.
+ */
+export function planeMatrix(
+  pos: Vec3,
+  tangent: Vec3,
+  radial: Vec3,
+  rot: Mat3,
+  width: number,
+  height: number
+) {
+  const EPS = 0.05;
+  // Pixels per world unit at the origin, so the matrix comes out near unit scale.
+  const K = (FOCAL / CAM_DIST) * (Math.min(width, height) / 2);
+
+  const at = (v: Vec3) => project(apply(rot, v), width, height);
+  const p0 = at(pos);
+  const p1 = at([pos[0] + tangent[0] * EPS, pos[1] + tangent[1] * EPS, pos[2] + tangent[2] * EPS]);
+  const p2 = at([pos[0] + radial[0] * EPS, pos[1] + radial[1] * EPS, pos[2] + radial[2] * EPS]);
+
+  const d = EPS * K;
+  let a = (p1.x - p0.x) / d;
+  let b = (p1.y - p0.y) / d;
+  let c = (p2.x - p0.x) / d;
+  let e = (p2.y - p0.y) / d;
+
+  // Half of every orbit runs right-to-left, where the mapping would render the
+  // text mirrored. Rotating it 180 degrees in-plane keeps it reading correctly
+  // without lifting it out of the band.
+  const flipped = a < 0;
+  if (flipped) {
+    a = -a; b = -b; c = -c; e = -e;
+  }
+
+  // Where the plane turns edge-on, the true projection squashes the glyphs to a
+  // line. That is physically right and visually useless -- the label simply
+  // vanishes and then snaps back. So the height perpendicular to the baseline is
+  // floored: still clearly foreshortened, never collapsed.
+  const exLen = Math.hypot(a, b) || 1e-6;
+  const nx = -b / exLen, ny = a / exLen;          // unit normal to the baseline
+  const along = (c * a + e * b) / exLen;          // component of "up" along the baseline
+  let perp = c * nx + e * ny;                     // and perpendicular to it
+  const sign = perp < 0 ? -1 : 1;
+  perp = sign * Math.max(Math.abs(perp), MIN_GLYPH_HEIGHT);
+  c = (a / exLen) * along + nx * perp;
+  e = (b / exLen) * along + ny * perp;
+
+  return { a, b, c, d: e, x: p0.x, y: p0.y, z: apply(rot, pos)[2], flipped };
+}
+
+/** Unit tangent and outward radial at parameter `ang` on a ring. */
+export function ringFrame(basisA: Vec3, basisB: Vec3, ang: number) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const radial: Vec3 = [
+    basisA[0] * ca + basisB[0] * sa,
+    basisA[1] * ca + basisB[1] * sa,
+    basisA[2] * ca + basisB[2] * sa,
+  ];
+  const tangent: Vec3 = [
+    -basisA[0] * sa + basisB[0] * ca,
+    -basisA[1] * sa + basisB[1] * ca,
+    -basisA[2] * sa + basisB[2] * ca,
+  ];
+  return { radial, tangent };
 }
