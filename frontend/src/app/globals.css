@@ -321,11 +321,8 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   /* Entrance for content that should arrive rather than appear. backwards fill so
      a delayed element is hidden until its turn instead of flashing first. */
   .float-in {
-    /* `both`, not `backwards`. backwards holds the from-state during the DELAY
-       only; once the animation ends the element reverts to its base rule, so with
-       `opacity: 0` here the content faded in and then vanished. `both` also holds
-       the to-state afterwards, which is the half that was missing. */
-    animation: floatIn 0.62s cubic-bezier(0.16, 1, 0.3, 1) both;
+    opacity: 0;
+    animation: floatIn 0.62s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
   html[data-motion="reduced"] .float-in { animation: none; opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
