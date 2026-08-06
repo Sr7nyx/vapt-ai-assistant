@@ -88,9 +88,15 @@ export default function Dashboard() {
         </Section>
         {/* Decorative only: no labels, and the particle count scales itself down
             to this box so it stays a sphere rather than a solid disc. */}
-        <div className="hidden lg:block w-44 shrink-0 -mt-4 opacity-80">
+        <div
+           className="hidden lg:block w-52 shrink-0 -mt-5 opacity-100"
+           style={{
+             filter:
+               "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
+          }}
+        >
           <ReactiveOrb showLabels={false} />
-        </div>
+      </div>
       </div>
 
       {/* Risk sits beside severity because the interesting fact is the DIFFERENCE
