@@ -114,12 +114,56 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
 }
 
 @layer components {
+  /* Inputs match the running interface: flat, hairline, monospace, with the
+     phosphor showing only on focus. */
   .input {
-    @apply bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none w-full transition-all font-mono;
+    @apply bg-bg/70 border border-border rounded-md px-3 py-2 text-sm outline-none w-full transition-colors font-mono;
+  }
+  .input::placeholder {
+    @apply text-muted/50;
+  }
+  .input:hover:not(:focus):not(:disabled) {
+    @apply border-border/80;
+    background-color: rgba(var(--phosphor), 0.02);
   }
   .input:focus {
     @apply border-accent;
-    box-shadow: 0 0 0 2px rgba(var(--phosphor), 0.15);
+    box-shadow: inset 2px 0 0 rgba(var(--phosphor), 0.85);
+  }
+  .input:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
+  /* A native select renders the operating system's own arrow, which is the single
+     most out-of-place element on a themed dark page -- grey, chunky, and a
+     different shape on every platform. Replaced with a phosphor chevron. */
+  select.input {
+    @apply appearance-none pr-8 cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%237ee787' stroke-width='1.4'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 10px 6px;
+  }
+
+  /* Dense inline field for a configuration strip: the label sits above a compact
+     control, several to a row, so settings take one band instead of six. */
+  .field-inline {
+    @apply grid gap-1 min-w-0;
+  }
+  .field-inline > span {
+    @apply text-[10px] tracking-widest text-muted;
+  }
+  .field-inline .input {
+    @apply py-1.5 text-xs;
+  }
+
+  /* File drop target, styled as an affordance rather than a bordered box. */
+  .dropzone {
+    @apply rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted text-center cursor-pointer transition-colors;
+  }
+  .dropzone:hover {
+    @apply border-accent/60 text-text;
+    background-color: rgba(var(--phosphor), 0.03);
   }
 
   /* Interactive elements are bracketed, the way a terminal marks an actionable

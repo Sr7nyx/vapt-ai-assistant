@@ -179,43 +179,44 @@ export default function ImportPage() {
 
       <Section title="Source">
         <div className="grid gap-4">
-        <Field label="Project">
-          <select
-            className="input"
-            value={projectId ?? ""}
-            onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">— no project selected —</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.client ? ` (${p.client})` : ""}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="grid sm:grid-cols-3 gap-3">
-          <Field label="Default category">
+        {/* Same band as the analyzer: configuration compressed to one row so the
+            file input and the candidate table are what the page leads with. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-3">
+          <label className="field-inline col-span-2 lg:col-span-1">
+            <span>PROJECT</span>
+            <select
+              className="input"
+              value={projectId ?? ""}
+              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">none selected</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.client ? ` (${p.client})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field-inline col-span-2">
+            <span>DEFAULT CATEGORY</span>
             <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
               {CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
             </select>
-          </Field>
-          <Field label="Default environment">
+          </label>
+          <label className="field-inline">
+            <span>ENVIRONMENT</span>
             <select className="input" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
               {ENVIRONMENTS.map((c) => (<option key={c} value={c}>{c}</option>))}
             </select>
-          </Field>
-          <Field label="Default status">
+          </label>
+          <label className="field-inline">
+            <span>STATUS</span>
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
               {STATUSES.map((c) => (<option key={c} value={c}>{c}</option>))}
             </select>
-          </Field>
+          </label>
         </div>
-        <p className="text-xs text-muted -mt-1">
-          Applied only where a candidate has no value of its own, so anything the parser or triage
-          determined is kept.
-        </p>
 
         <Field label="Scanner files">
           <input type="file" multiple accept=".xml,.nessus,.json,.csv" className="text-sm" onChange={(e) => setFiles(e.target.files)} />

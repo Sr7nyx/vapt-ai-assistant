@@ -219,52 +219,69 @@ export default function AnalyzerPage() {
 
       <Section title="Input">
         <div className="grid gap-4">
-        <Field label="Project">
-          <select className="input" value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— no project selected —</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.client ? ` (${p.client})` : ""}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Analysis type">
-          <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
-            {ANALYSIS_TYPES.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          <Field label="Default category">
-            <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+        {/* Configuration is set once and rarely revisited; evidence is what you
+            do every time. Five stacked fields pushed the textarea below the fold,
+            so they are one dense band and the evidence comes first. */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-3">
+          <label className="field-inline col-span-2 lg:col-span-1">
+            <span>PROJECT</span>
+            <select
+              className="input"
+              value={projectId ?? ""}
+              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">none selected</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.client ? ` (${p.client})` : ""}
+                </option>
               ))}
             </select>
-          </Field>
-          <Field label="Default environment">
+          </label>
+          <label className="field-inline col-span-2">
+            <span>ANALYSIS</span>
+            <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+              {ANALYSIS_TYPES.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field-inline">
+            <span>ENVIRONMENT</span>
             <select className="input" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
-              {ENVIRONMENTS.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
+              {ENVIRONMENTS.map((c) => (<option key={c}>{c}</option>))}
             </select>
-          </Field>
-          <Field label="Default status">
+          </label>
+          <label className="field-inline">
+            <span>STATUS</span>
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
-              {STATUSES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
+              {STATUSES.map((c) => (<option key={c}>{c}</option>))}
             </select>
-          </Field>
+          </label>
+          <label className="field-inline col-span-2 lg:col-span-5">
+            <span>DEFAULT CATEGORY</span>
+            <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (<option key={c}>{c}</option>))}
+            </select>
+          </label>
         </div>
 
-        <Field label="Evidence files (optional)">
-          <label className="border border-dashed border-border rounded-lg px-4 py-6 text-center text-sm text-muted hover:border-accent transition-colors cursor-pointer block">
+        <Field label="Evidence / raw input">
+          {/* The overlay sits on the evidence itself, because that is what the
+              pipeline is reading. A spinner elsewhere would say only "wait". */}
+          <div className="relative">
+            <textarea
+              className="input min-h-48 font-mono text-xs"
+              placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              readOnly={running}
+            />
+            <ScanOverlay active={running} progress={job?.progress ?? 0} done={!!job?.done} />
+          </div>
+        <Field label="Attachments (optional)">
+          <label className="dropzone block">
             <input
               type="file"
               multiple
@@ -275,7 +292,8 @@ export default function AnalyzerPage() {
                 e.target.value = "";
               }}
             />
-            Click to attach text evidence — TXT, LOG, JSON, HAR, CSV, XML, YAML, MD (up to {PER_FILE_CAP.toLocaleString()} chars each)
+            Attach text evidence &mdash; TXT, LOG, JSON, HAR, CSV, XML, YAML, MD, up to{" "}
+            {PER_FILE_CAP.toLocaleString()} chars each
           </label>
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
@@ -297,19 +315,6 @@ export default function AnalyzerPage() {
           )}
         </Field>
 
-        <Field label="Evidence / raw input">
-          {/* The overlay sits on the evidence itself, because that is what the
-              pipeline is reading. A spinner elsewhere would say only "wait". */}
-          <div className="relative">
-            <textarea
-              className="input min-h-48 font-mono text-xs"
-              placeholder="Paste HTTP requests/responses, scanner output, logs, source code…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              readOnly={running}
-            />
-            <ScanOverlay active={running} progress={job?.progress ?? 0} done={!!job?.done} />
-          </div>
           {guard && !guard.ok && (
             <p className="text-xs text-warn mt-2 border border-warn/40 rounded-lg px-3 py-2">
               {guard.reason}
