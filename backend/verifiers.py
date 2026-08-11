@@ -1,40 +1,47 @@
-"""Deterministic verification of finding claims against their evidence.
+"""Deterministic verification of a finding's claim against its own evidence.
 
-The skeptical reviewer is a second model auditing the first, which means the
-project's central claim -- that a finding is real only when the evidence proves it
--- ultimately rests on an LLM assertion. For a meaningful subset of finding
-classes that assertion can be replaced with an actual check: a missing security
-header either is or is not absent from the response in the evidence, and no
-opinion is required to establish which.
+Every check runs against ONE exchange, chosen by evidence_model.bind() from the
+finding's own URL, parameter and method. That scoping is the substance of this
+module, not a detail of it: the previous version searched the whole submission, so
+a header present on /login refuted a finding about /admin, a 200 belonging to the
+authorised baseline "confirmed" an IDOR, and a payload from a later request
+appeared to be reflected by an earlier one. Those were false CONFIRMATIONS and
+false REFUTATIONS from the component the verdict engine weights above the
+reviewer, which is worse than having no verifier at all.
 
-Each verifier answers one question about one class of claim and returns:
+Three answers, and the third is the important one:
 
-    CONFIRMED    the evidence demonstrably supports the claim
-    REFUTED      the evidence demonstrably contradicts it
-    INSUFFICIENT the evidence does not contain what is needed to decide
+    CONFIRMED     the bound exchange demonstrably supports the claim
+    REFUTED       the bound exchange demonstrably contradicts it
+    INSUFFICIENT  the evidence does not settle it -- including when the finding
+                  cannot be tied to a specific exchange
 
-REFUTED is the valuable outcome. It is a hallucination caught by code rather than
-by a second opinion, and unlike a reviewer's doubt it is reproducible and can be
-shown to a client.
-
-Design rules, applied throughout:
-
-  - Silence is not refutation. A single response with no Set-Cookie header does not
-    disprove a cookie finding; the evidence simply may not include the response
-    that set it. Verifiers return INSUFFICIENT unless the evidence positively
-    settles the question, which is why the anchor checks below are strict.
-  - Verifiers never invent severity, never rewrite a finding, and never delete
-    anything. They attach a result. The verdict engine decides what it means.
-  - Every verifier is pure: text in, result out. No network, no model, no state.
+Refusing to decide is a feature. A verifier that guesses which exchange a finding
+meant has reintroduced the bug this scoping removes.
 """
 import re
+
+import evidence_model as em
 
 CONFIRMED = "CONFIRMED"
 REFUTED = "REFUTED"
 INSUFFICIENT = "INSUFFICIENT"
 
-# Header names carry their canonical spelling for messages; matching is
-# case-insensitive, as HTTP requires.
+# Findings say "CSP" and "HSTS" far more often than the full header name, so the
+# abbreviations have to resolve or the check silently never fires.
+HEADER_ALIASES = {
+    "csp": "content-security-policy",
+    "hsts": "strict-transport-security",
+    "xfo": "x-frame-options",
+    "x-frame options": "x-frame-options",
+    "nosniff": "x-content-type-options",
+    "content type options": "x-content-type-options",
+    "referrer policy": "referrer-policy",
+    "permissions policy": "permissions-policy",
+    "content security policy": "content-security-policy",
+    "strict transport security": "strict-transport-security",
+}
+
 SECURITY_HEADERS = {
     "x-frame-options": "X-Frame-Options",
     "content-security-policy": "Content-Security-Policy",
@@ -42,289 +49,389 @@ SECURITY_HEADERS = {
     "x-content-type-options": "X-Content-Type-Options",
     "referrer-policy": "Referrer-Policy",
     "permissions-policy": "Permissions-Policy",
-    "x-xss-protection": "X-XSS-Protection",
 }
 
-_HEADER_LINE = re.compile(r"^[ \t]*([A-Za-z][A-Za-z0-9-]{1,40})[ \t]*:[ \t]*(.*)$", re.M)
-_STATUS_LINE = re.compile(r"^\s*HTTP/\d(?:\.\d)?\s+(\d{3})", re.M | re.I)
-_MISSING_WORDS = re.compile(r"\b(missing|absent|not\s+set|not\s+present|no\b|lacks?|without|fails?\s+to\s+set)\b", re.I)
+_MISSING_WORDS = re.compile(
+    r"\b(missing|absent|not\s+set|not\s+present|no\b|lacks?|without|fails?\s+to\s+set)\b", re.I
+)
 
 
-def _text(finding, raw_input=""):
-    """Everything the finding rests on: its own evidence first, then the original
-    input, since a finding's evidence field is often an excerpt of it."""
-    parts = [
-        str((finding or {}).get("evidence", "") or ""),
-        str((finding or {}).get("steps", "") or ""),
-        str(raw_input or ""),
-    ]
-    return "\n".join(p for p in parts if p.strip())
+def _result(status, verifier, detail, exchange=None, evidence=""):
+    return {
+        "status": status,
+        "verifier": verifier,
+        "detail": detail,
+        "exchange_id": (exchange or {}).get("id", ""),
+        "evidence": evidence[:300],
+    }
 
 
-def _headers(text):
-    """Header names present anywhere in the text, lowercased.
-
-    Deliberately loose about which response a header belongs to: the question
-    these verifiers answer is whether the evidence shows the header at all.
-    """
-    found = {}
-    for name, value in _HEADER_LINE.findall(text):
-        found.setdefault(name.lower(), []).append(value.strip())
-    return found
+def _title(finding):
+    return f"{(finding or {}).get('title','')} {(finding or {}).get('description','')}".lower()
 
 
-def _looks_like_http_response(text):
-    """Whether the evidence contains something recognisable as a response.
+# --- individual verifiers, each scoped to one exchange ------------------------
 
-    Without this, every verifier would 'refute' claims by reading silence as
-    absence, which is the one mistake that would make this layer worse than
-    nothing.
-    """
-    return bool(_STATUS_LINE.search(text)) or len(_headers(text)) >= 2
+def _named_header(title):
+    hyphenated = title.replace(" ", "-")
+    for key in SECURITY_HEADERS:
+        if key in hyphenated:
+            return key
+    for alias, key in HEADER_ALIASES.items():
+        if re.search(rf"\b{re.escape(alias)}\b", title):
+            return key
+    return None
 
 
-def _result(status, verifier, detail, evidence=""):
-    return {"status": status, "verifier": verifier, "detail": detail, "evidence": evidence[:300]}
-
-
-# --- individual verifiers ----------------------------------------------------
-
-def verify_missing_header(finding, raw_input=""):
-    """A claim that a security header is missing, checked against the response."""
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    target = next((k for k in SECURITY_HEADERS if k in title.replace(" ", "-")), None)
-    if not target:
-        return None                      # not a claim this verifier handles
-    if not _MISSING_WORDS.search(title):
-        return None                      # a claim ABOUT the header, not that it is absent
-
-    text = _text(finding, raw_input)
-    if not _looks_like_http_response(text):
+def verify_missing_header(finding, ex):
+    title = _title(finding)
+    target = _named_header(title)
+    if not target or not _MISSING_WORDS.search(title):
+        return None
+    if not (ex.get("response") or {}):
         return _result(INSUFFICIENT, "missing_header",
-                       f"No HTTP response in the evidence, so the absence of {SECURITY_HEADERS[target]} cannot be established.")
+                       "The bound exchange has no response, so header absence cannot be established.", ex)
 
-    present = _headers(text)
-    if target in present:
+    values = em.header(ex, target)
+    name = SECURITY_HEADERS[target]
+    if values:
         return _result(REFUTED, "missing_header",
-                       f"{SECURITY_HEADERS[target]} is claimed missing but appears in the response.",
-                       f"{SECURITY_HEADERS[target]}: {present[target][0]}")
+                       f"{name} is claimed missing but is present on this response.",
+                       ex, f"{name}: {values[0]}")
     return _result(CONFIRMED, "missing_header",
-                   f"{SECURITY_HEADERS[target]} does not appear in the response headers in the evidence.")
+                   f"{name} is absent from this response.", ex)
 
 
-def verify_cookie_flags(finding, raw_input=""):
-    """A claim that a cookie lacks Secure, HttpOnly or SameSite."""
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    if "cookie" not in title:
+def verify_cookie_flags(finding, ex):
+    title = _title(finding)
+    if "cookie" not in title or not _MISSING_WORDS.search(title):
         return None
     flags = [f for f in ("secure", "httponly", "samesite") if f in title.replace("-", "")]
-    if not flags or not _MISSING_WORDS.search(title):
+    if not flags:
         return None
 
-    text = _text(finding, raw_input)
-    cookies = [v for k, vals in _headers(text).items() if k == "set-cookie" for v in vals]
+    cookies = em.header(ex, "set-cookie")
     if not cookies:
         return _result(INSUFFICIENT, "cookie_flags",
-                       "No Set-Cookie header in the evidence, so the cookie's attributes cannot be checked.")
+                       "This response sets no cookie, so its attributes cannot be checked.", ex)
 
     for flag in flags:
-        # A claim is refuted only if EVERY cookie carries the flag; one hardened
-        # cookie does not clear a set that also contains a bare one.
         if all(re.search(rf"\b{flag}\b", c, re.I) for c in cookies):
             return _result(REFUTED, "cookie_flags",
-                           f"The cookie is claimed to lack {flag}, but every Set-Cookie in the evidence sets it.",
-                           cookies[0])
+                           f"The cookie is claimed to lack {flag}, but every cookie set here has it.",
+                           ex, cookies[0])
     missing = [f for f in flags if not any(re.search(rf"\b{f}\b", c, re.I) for c in cookies)]
     if missing:
         return _result(CONFIRMED, "cookie_flags",
-                       f"No Set-Cookie in the evidence sets {', '.join(missing)}.", cookies[0])
-    return _result(INSUFFICIENT, "cookie_flags", "Some cookies set the attribute and some do not.")
+                       f"No cookie set by this response carries {', '.join(missing)}.", ex, cookies[0])
+    return _result(INSUFFICIENT, "cookie_flags",
+                   "Some cookies here set the attribute and some do not.", ex)
 
 
-def verify_cors(finding, raw_input=""):
-    """A claim of a permissive CORS policy: wildcard origin with credentials."""
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    if "cors" not in title and "access-control" not in title and "cross-origin" not in title:
+def verify_cors(finding, ex):
+    title = _title(finding)
+    if not any(k in title for k in ("cors", "access-control", "cross-origin")):
         return None
 
-    text = _text(finding, raw_input)
-    h = _headers(text)
-    origin = h.get("access-control-allow-origin", [])
-    creds = h.get("access-control-allow-credentials", [])
+    origin = em.header(ex, "access-control-allow-origin")
+    creds = em.header(ex, "access-control-allow-credentials")
     if not origin:
         return _result(INSUFFICIENT, "cors",
-                       "No Access-Control-Allow-Origin header in the evidence.")
+                       "This response sets no Access-Control-Allow-Origin.", ex)
 
     wildcard = any(v.strip() == "*" for v in origin)
     creds_true = any(v.strip().lower() == "true" for v in creds)
+    sent = em.request_header(ex, "origin")
+    reflected = bool(sent) and any(v.strip() == sent[0].strip() for v in origin)
 
     if wildcard and creds_true:
-        # Worth stating plainly: browsers reject this combination outright, so the
-        # real risk is a server that reflects the request origin instead.
         return _result(CONFIRMED, "cors",
-                       "Access-Control-Allow-Origin is * with credentials enabled. Note that browsers "
-                       "refuse this combination, so the exploitable form is origin reflection rather than "
-                       "a literal wildcard.",
-                       f"{origin[0]} / credentials: {creds[0]}")
+                       "Wildcard origin with credentials enabled. Browsers refuse this combination, "
+                       "so the exploitable form is origin reflection rather than a literal wildcard.",
+                       ex, f"{origin[0]} / credentials: {creds[0]}")
+    if reflected:
+        # The strong case, and only checkable now that the REQUEST is available.
+        detail = "The request's Origin is echoed back in Access-Control-Allow-Origin"
+        detail += " with credentials enabled." if creds_true else ", though credentials are not enabled."
+        return _result(CONFIRMED if creds_true else INSUFFICIENT, "cors", detail,
+                       ex, f"Origin: {sent[0]} -> {origin[0]}")
     if wildcard:
-        return _result(CONFIRMED, "cors", "Access-Control-Allow-Origin is a wildcard.", origin[0])
-    if creds_true and "reflect" in title:
-        return _result(CONFIRMED, "cors",
-                       "Credentials are allowed and the origin is not a wildcard, consistent with reflection.",
-                       f"{origin[0]} / credentials: {creds[0]}")
-    if not wildcard and not creds_true and ("wildcard" in title or "credential" in title):
+        return _result(CONFIRMED, "cors", "Access-Control-Allow-Origin is a wildcard.", ex, origin[0])
+    if "wildcard" in title or "arbitrary" in title or "any origin" in title:
         return _result(REFUTED, "cors",
-                       "A permissive CORS policy is claimed, but the evidence shows neither a wildcard "
-                       "origin nor credentials enabled.",
-                       origin[0])
-    return _result(INSUFFICIENT, "cors", "CORS headers are present but do not settle the claim.")
+                       "A permissive policy is claimed, but this response neither uses a wildcard nor "
+                       "reflects the requesting origin.", ex, origin[0])
+    return _result(INSUFFICIENT, "cors", "CORS headers present but they do not settle the claim.", ex)
 
 
-def verify_reflection(finding, raw_input=""):
-    """A reflected-input claim: the payload must actually appear in the response.
+# Where a payload lands decides whether reflection is exploitable at all.
+_CTX_SCRIPT = "inside a script block"
+_CTX_ATTR = "inside an HTML attribute"
+_CTX_HTML = "in the HTML body"
+_CTX_TEXT = "in a non-HTML response"
 
-    This is the check that catches the most common fabrication -- a reflected XSS
-    reported when nothing was ever echoed back.
-    """
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
+_PAYLOAD = re.compile(
+    r"(<script[^>]*>.*?</script>|<img[^>]+on\w+\s*=[^>]*>|<svg[^>]+on\w+\s*=[^>]*>|javascript:[^\s\"'<>]+|['\"][^'\"]*\balert\s*\()",
+    re.I | re.S,
+)
+
+
+def _context_of(body, payload):
+    """Where in the response the payload landed."""
+    idx = body.lower().find(payload.lower())
+    if idx < 0:
+        return None
+    before = body[:idx]
+    open_script = before.lower().rfind("<script")
+    close_script = before.lower().rfind("</script>")
+    if open_script > close_script:
+        return _CTX_SCRIPT
+    tag_open = before.rfind("<")
+    tag_close = before.rfind(">")
+    if tag_open > tag_close:
+        return _CTX_ATTR
+    return _CTX_HTML
+
+
+def verify_reflection(finding, ex):
+    title = _title(finding)
     if not re.search(r"\b(reflect\w*|xss|cross[- ]site scripting)\b", title):
         return None
 
-    text = _text(finding, raw_input)
-    if not _looks_like_http_response(text):
-        return _result(INSUFFICIENT, "reflection", "No HTTP response in the evidence to check for reflection.")
+    req = ex.get("request") or {}
+    resp = ex.get("response") or {}
+    if not resp:
+        return _result(INSUFFICIENT, "reflection", "The bound exchange has no response.", ex)
 
-    payloads = re.findall(r"(<script[^>]*>.*?</script>|<img[^>]+onerror\s*=[^>]*>|<svg[^>]+on\w+\s*=[^>]*>|javascript:[^\s\"'<>]+)", text, re.I | re.S)
+    body = resp.get("body") or ""
+    # Only payloads submitted in THIS request count. The previous version searched
+    # the whole submission, so a payload from a later request looked reflected here.
+    submitted = " ".join(
+        [req.get("target", ""), req.get("body", "")]
+        + [v for vs in (req.get("params") or {}).values() for v in vs]
+    )
+    payloads = _PAYLOAD.findall(submitted)
     if not payloads:
         return _result(INSUFFICIENT, "reflection",
-                       "No recognisable payload in the evidence, so reflection cannot be verified.")
+                       "This request submits no recognisable payload, so reflection cannot be checked.", ex)
 
-    # Split at the response boundary and ask whether the payload survives into it.
-    m = _STATUS_LINE.search(text)
-    body = text[m.start():] if m else text
     for p in payloads:
-        occurrences = len(re.findall(re.escape(p), body, re.I))
-        if occurrences:
-            encoded = re.search(re.escape(p.replace("<", "&lt;").replace(">", "&gt;")), body, re.I)
-            if encoded:
+        ctx = _context_of(body, p)
+        if ctx:
+            executable = ctx in (_CTX_SCRIPT, _CTX_ATTR) or p.lower().startswith("<script")
+            if not (resp.get("headers") or {}).get("content-type"):
+                ctype = ""
+            else:
+                ctype = (resp["headers"]["content-type"][0] or "").lower()
+            if ctype and "html" not in ctype:
                 return _result(INSUFFICIENT, "reflection",
-                               "The payload appears both raw and HTML-encoded; which one the response "
-                               "returned cannot be determined from this excerpt.", p[:120])
-            return _result(CONFIRMED, "reflection",
-                           "The payload appears unencoded in the response.", p[:120])
+                               f"The payload is returned verbatim, but the response is {ctype.split(';')[0]}, "
+                               "so it is reflection without an executable context.", ex, p[:120])
+            if executable:
+                return _result(CONFIRMED, "reflection",
+                               f"The payload is returned unencoded {ctx}, which is an executable context.",
+                               ex, p[:120])
+            return _result(INSUFFICIENT, "reflection",
+                           f"The payload is returned unencoded {ctx}. Reflection is demonstrated; "
+                           "execution in a browser is not, and needs a proof of concept.", ex, p[:120])
 
-    # Not reflected raw. Encoding the payload is what a page that correctly handles
-    # the input does, so finding the encoded form in the RESPONSE refutes the claim.
-    # Checked against the body rather than the whole text: the request naturally
-    # contains the raw payload, and matching there would prove nothing.
     for p in payloads:
-        encoded = (p.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"),
-                   p.replace("<", "%3C").replace(">", "%3E"),
-                   p.replace("<", "\\u003c").replace(">", "\\u003e"))
-        for form in encoded:
-            if form != p and re.search(re.escape(form), body, re.I):
+        for form in (
+            p.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"),
+            p.replace("<", "%3C").replace(">", "%3E"),
+            p.replace("<", "\\u003c").replace(">", "\\u003e"),
+        ):
+            if form != p and form.lower() in body.lower():
                 return _result(REFUTED, "reflection",
-                               "The payload appears in the response HTML-encoded rather than raw, which is "
-                               "the behaviour of a page that handles the input correctly.", form[:120])
-    return _result(INSUFFICIENT, "reflection", "A payload was submitted but does not appear in the response excerpt.")
+                               "The payload is returned encoded rather than raw, which is what a response "
+                               "that handles the input correctly does.", ex, form[:120])
+    return _result(INSUFFICIENT, "reflection",
+                   "A payload was submitted but does not appear in this response.", ex)
 
 
-def verify_tls_version(finding, raw_input=""):
-    """A claim about a deprecated TLS or SSL version being enabled."""
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    if not re.search(r"\b(tls|ssl)\b", title):
-        return None
-    claimed = re.search(r"\b(ssl\s*[23]|tls\s*1\.[01])\b", title)
-    if not claimed:
-        return None
-
-    version = claimed.group(1).replace(" ", "").upper()
-    text = _text(finding, raw_input)
-    if not re.search(r"\b(tls|ssl)\w*\s*1?\.?\d", text, re.I):
-        return _result(INSUFFICIENT, "tls_version", "The evidence does not name any negotiated protocol version.")
-
-    pattern = version.replace(".", r"\.?").replace("TLS", r"TLSv?").replace("SSL", r"SSLv?")
-    if re.search(pattern, text, re.I):
-        return _result(CONFIRMED, "tls_version", f"{version} appears in the evidence as supported.")
-    return _result(INSUFFICIENT, "tls_version",
-                   f"{version} is claimed but does not appear in the evidence; a scan output naming the "
-                   "enabled protocols is needed.")
+def _principal(ex):
+    """Whatever identifies the caller. Not authentication -- just enough to tell
+    two requests apart, which is all the access-control check needs."""
+    for name in ("authorization", "cookie", "x-api-key"):
+        vals = em.request_header(ex, name)
+        if vals:
+            return f"{name}:{vals[0][:60]}"
+    return ""
 
 
-def verify_status_code(finding, raw_input=""):
-    """An access-control claim asserting a successful response.
+def _object_ref(ex):
+    """The object being addressed: an id-like parameter, or the path itself."""
+    req = ex.get("request") or {}
+    for key, vals in (req.get("params") or {}).items():
+        if re.search(r"(^|_)(id|uid|user|account|order|doc|file|obj)", key, re.I) and vals:
+            return f"{key}={vals[0]}"
+    m = re.search(r"/(\d{1,12})(?:/|$)", req.get("path") or "")
+    return f"path:{m.group(1)}" if m else ""
 
-    A finding that says an unauthorized request succeeded, sitting on evidence
-    whose only response is a 401 or 403, is contradicting itself.
+
+def verify_access_control(finding, exchanges):
+    """An access-control claim is about a RELATIONSHIP between exchanges.
+
+    This one deliberately does not take a bound exchange. Headers and reflection are
+    properties of a single response, so binding to one is right; "principal A
+    reached principal B's object" is a property of a SET, and asking which single
+    exchange it belongs to has no answer -- both of them, or neither.
+
+    A 200 proves nothing alone. It may be the authorised baseline, a login page, an
+    error rendered with status 200, a public object, or the same caller fetching
+    their own record. What the claim needs is: one caller, two different objects,
+    both retrieved, different content back.
     """
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    if not re.search(r"\b(idor|bola|broken (object|function) level|unauthori[sz]ed access|access control|privilege escalation|authenticat\w* bypass)\b", title):
+    title = _title(finding)
+    if not re.search(
+        r"\b(idor|bola|broken (object|function) level|unauthori[sz]ed access|access control|"
+        r"privilege escalation|authenticat\w* bypass)\b", title):
         return None
 
-    text = _text(finding, raw_input)
-    codes = [int(c) for c in _STATUS_LINE.findall(text)]
-    if not codes:
-        return _result(INSUFFICIENT, "status_code", "No HTTP status line in the evidence.")
+    usable = [e for e in exchanges if (e.get("request") and e.get("response"))]
+    if not usable:
+        return _result(INSUFFICIENT, "access_control",
+                       "The evidence contains no complete request/response pair.")
 
-    if any(200 <= c < 300 for c in codes):
-        return _result(CONFIRMED, "status_code",
-                       f"The evidence contains a successful response ({', '.join(str(c) for c in codes if 200 <= c < 300)}), "
-                       "consistent with access having been granted.")
-    if all(c in (401, 403) for c in codes):
-        return _result(REFUTED, "status_code",
-                       f"The claim is that access succeeded, but every response in the evidence is "
-                       f"{', '.join(str(c) for c in sorted(set(codes)))}.")
-    return _result(INSUFFICIENT, "status_code",
-                   f"Responses present ({', '.join(str(c) for c in sorted(set(codes)))}) do not settle the claim.")
+    # Group by caller, then look for one caller touching two distinct objects.
+    by_principal = {}
+    for e in usable:
+        by_principal.setdefault(_principal(e), []).append(e)
+
+    denied = []
+    for principal, group in by_principal.items():
+        if not principal:
+            continue
+        seen = {}
+        for e in group:
+            obj = _object_ref(e)
+            status = (e["response"] or {}).get("status", 0)
+            if not obj:
+                continue
+            if 200 <= status < 300:
+                seen[obj] = e
+            elif status in (401, 403):
+                denied.append((obj, status))
+
+        if len(seen) >= 2:
+            objs = list(seen.items())
+            for i in range(len(objs)):
+                for j in range(i + 1, len(objs)):
+                    (oa, ea), (ob, eb) = objs[i], objs[j]
+                    ba = ((ea["response"] or {}).get("body") or "").strip()
+                    bb = ((eb["response"] or {}).get("body") or "").strip()
+                    if ba and bb and ba != bb:
+                        return _result(CONFIRMED, "access_control",
+                                       f"One caller retrieved two different objects ({oa} and {ob}) and "
+                                       "received different content for each, which is the pattern this "
+                                       "finding claims.", ea, f"{oa} vs {ob}")
+            return _result(INSUFFICIENT, "access_control",
+                           "The same caller retrieved several objects, but the responses are identical, "
+                           "so no protected content belonging to another principal is shown.", None)
+
+    # Every cross-object attempt was refused: the claim is contradicted.
+    successes = [e for e in usable if 200 <= (e["response"] or {}).get("status", 0) < 300]
+    if denied and len(successes) <= 1:
+        codes = ", ".join(str(c) for _, c in denied)
+        return _result(REFUTED, "access_control",
+                       f"The claim is that access succeeded, but every request for another object was "
+                       f"refused ({codes}). The successful response is the caller's own baseline.")
+
+    if successes:
+        return _result(INSUFFICIENT, "access_control",
+                       "A successful response alone does not establish an access-control failure: it may be "
+                       "the authorised baseline, a public object, or the caller's own record. Evidence needs "
+                       "one caller retrieving another principal's object.")
+
+    return _result(INSUFFICIENT, "access_control",
+                   "No successful response, so unauthorised access is not demonstrated.")
 
 
-def verify_directory_listing(finding, raw_input=""):
-    """A directory-listing claim: the response should show an actual index."""
-    title = f"{finding.get('title','')} {finding.get('description','')}".lower()
-    if "directory listing" not in title and "autoindex" not in title and "index of" not in title:
+def verify_directory_listing(finding, ex):
+    title = _title(finding)
+    if not any(k in title for k in ("directory listing", "autoindex", "index of")):
         return None
-
-    text = _text(finding, raw_input)
-    if not _looks_like_http_response(text):
-        return _result(INSUFFICIENT, "directory_listing", "No HTTP response in the evidence.")
-    if re.search(r"<title>\s*Index of|<h1>\s*Index of|Directory listing for", text, re.I):
-        entries = len(re.findall(r'<a\s+href="[^"]+"', text, re.I))
+    body = ((ex.get("response") or {}).get("body")) or ""
+    if not body:
+        return _result(INSUFFICIENT, "directory_listing", "The bound exchange has no response body.", ex)
+    if re.search(r"<title>\s*Index of|<h1>\s*Index of|Directory listing for", body, re.I):
+        entries = len(re.findall(r'<a\s+href="[^"]+"', body, re.I))
         if entries <= 1:
             return _result(CONFIRMED, "directory_listing",
-                           "An index page is present, but it lists no files. Listing an empty directory "
-                           "discloses nothing, which bears on severity.")
-        return _result(CONFIRMED, "directory_listing", f"An index page listing {entries} entries is present.")
-    return _result(INSUFFICIENT, "directory_listing",
-                   "The evidence does not contain an index page, so the listing cannot be confirmed.")
+                           "An index page is present but lists no files, which bears on severity.", ex)
+        return _result(CONFIRMED, "directory_listing", f"An index page listing {entries} entries.", ex)
+    return _result(INSUFFICIENT, "directory_listing", "No index page in this response.", ex)
 
 
-VERIFIERS = (
+SET_VERIFIERS = (verify_access_control,)
+
+SINGLE_EXCHANGE_VERIFIERS = (
     verify_missing_header,
     verify_cookie_flags,
     verify_cors,
     verify_reflection,
-    verify_tls_version,
-    verify_status_code,
     verify_directory_listing,
 )
 
 
 def verify_finding(finding, raw_input=""):
-    """Run every applicable verifier over one finding.
+    """Check a finding against the exchange it is about.
 
-    Returns None when no verifier claims the finding, which is the common case and
-    is not a failure: most classes cannot be settled from text alone, and saying so
-    is more useful than guessing.
+    Returns None when no verifier handles this class of claim -- the common case,
+    and not a failure. Most finding classes cannot be settled from text, and saying
+    so is more useful than guessing.
     """
+    finding = finding or {}
+    text = "\n\n".join(
+        t for t in (str(finding.get("evidence") or ""), str(raw_input or "")) if t.strip()
+    )
+    exchanges = em.parse_exchanges(text)
+    if not exchanges:
+        return None
+
+    ex, why = em.bind(finding, exchanges)
+
+    # Does any verifier even claim this finding? Checked before reporting a binding
+    # failure, so an unrelated finding is not told the evidence was ambiguous.
     results = []
-    for fn in VERIFIERS:
+
+    # Set-level claims first: they describe a relationship between exchanges, so
+    # they run whether or not a single exchange could be identified.
+    for fn in SET_VERIFIERS:
         try:
-            r = fn(finding or {}, raw_input)
-        except Exception as exc:                      # a broken verifier must never
-            r = _result(INSUFFICIENT, fn.__name__,    # break an analysis
-                        f"Verifier error: {exc}")
+            r = fn(finding, exchanges)
+        except Exception as exc:
+            r = _result(INSUFFICIENT, fn.__name__, f"Verifier error: {exc}")
         if r:
             results.append(r)
+
+    probe = ex or exchanges[0]
+
+    def _claims(fn):
+        """Whether a verifier handles this finding. Guarded: this runs before the
+        main loop, so an exception here would escape the loop's own protection."""
+        try:
+            return fn(finding, probe) is not None
+        except Exception:
+            return True     # it claimed the finding and then failed; report that
+
+    per_exchange_claims = any(_claims(fn) for fn in SINGLE_EXCHANGE_VERIFIERS)
+
+    if not results and not per_exchange_claims:
+        return None
+
+    if per_exchange_claims:
+        if ex is None:
+            results.append(_result(INSUFFICIENT, "binding", why))
+        else:
+            for fn in SINGLE_EXCHANGE_VERIFIERS:
+                try:
+                    r = fn(finding, ex)
+                except Exception as exc:
+                    r = _result(INSUFFICIENT, fn.__name__, f"Verifier error: {exc}", ex)
+                if r:
+                    results.append(r)
+
     if not results:
         return None
 
@@ -339,4 +446,6 @@ def verify_finding(finding, raw_input=""):
         "status": overall,
         "checks": results,
         "summary": "; ".join(r["detail"] for r in results),
+        "exchange_id": (ex or {}).get("id", ""),
+        "exchange_count": len(exchanges),
     }

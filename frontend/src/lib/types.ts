@@ -124,10 +124,16 @@ export interface VerificationCheck {
   verifier: string;
   detail: string;
   evidence: string;
+  /** Which HTTP exchange this check ran against. */
+  exchange_id?: string;
 }
 
 export interface Verification {
   status: string;
   checks: VerificationCheck[];
   summary: string;
+  /** The exchange the finding was bound to, and how many were in the evidence.
+   *  Empty when the finding could not be tied to one. */
+  exchange_id?: string;
+  exchange_count?: number;
 }

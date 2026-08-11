@@ -129,6 +129,24 @@ export default function ReviewPanel({
           </div>
           <p className="text-xs text-muted mt-1.5">
             Checked by parsing the evidence, not by asking a model.
+            {verification.exchange_count ? (
+              <>
+                {" "}
+                {verification.exchange_id ? (
+                  <>
+                    Run against{" "}
+                    <span className="text-text font-mono">{verification.exchange_id}</span> of{" "}
+                    {verification.exchange_count} in this evidence.
+                  </>
+                ) : (
+                  <>
+                    The evidence holds {verification.exchange_count} exchanges and the finding does
+                    not say which it refers to, so nothing was checked against a possibly unrelated
+                    response.
+                  </>
+                )}
+              </>
+            ) : null}
           </p>
           <ul className="mt-2 grid gap-1">
             {verification.checks

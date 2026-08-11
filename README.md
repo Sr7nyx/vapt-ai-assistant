@@ -44,9 +44,20 @@ evidence and returns one of three answers per check:
 | `REFUTED` | the evidence demonstrably contradicts it |
 | `INSUFFICIENT` | the evidence does not contain what is needed to decide |
 
-Covered today: missing security headers, cookie attributes, CORS policy, reflected
-payloads, deprecated TLS versions, access-control claims against response status,
-and directory listings. Each parses the actual HTTP evidence -- a header is present
+Evidence is first parsed into discrete HTTP exchanges, and each finding is bound to
+the one it is about using its own URL, parameter and method. That scoping is the
+substance of the layer, not a detail: searching a whole submission is only sound
+when it contains a single exchange, and with several it produces confident nonsense
+-- a header present on `/login` refuting a finding about `/admin`, a `200` belonging
+to the authorised baseline "confirming" an IDOR.
+
+When a finding cannot be tied to a specific exchange, the answer is `INSUFFICIENT`.
+A verifier that guesses which exchange was meant has reintroduced the bug the
+scoping removes.
+
+Covered today: missing security headers, cookie attributes, CORS policy (including
+origin reflection, which needs the request), reflected payloads with their output
+context, access control across a pair of exchanges, and directory listings. Each parses the actual HTTP evidence -- a header is present
 or it is not, and no opinion is required to establish which.
 
 `REFUTED` is the valuable outcome: a hallucination caught by code rather than by a
