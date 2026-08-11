@@ -189,7 +189,9 @@ class TestCors:
 
 
 class TestScope:
-    @pytest.mark.parametrize("title", ["SQL injection in export", "Server-side request forgery", "JWT algorithm confusion"])
+    # JWT moved out of this list when verify_jwt_alg_none was added: the class is
+    # covered now, and leaving it here would assert the opposite of the feature.
+    @pytest.mark.parametrize("title", ["SQL injection in export", "Server-side request forgery", "XXE injection"])
     def test_uncovered_classes_return_nothing(self, title):
         ev = "GET /x HTTP/1.1\n\nHTTP/1.1 200 OK\n\nbody"
         assert v.verify_finding({"title": title, "evidence": ev}) is None

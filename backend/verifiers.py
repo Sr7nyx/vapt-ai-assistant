@@ -363,7 +363,264 @@ def verify_directory_listing(finding, ex):
     return _result(INSUFFICIENT, "directory_listing", "No index page in this response.", ex)
 
 
-SET_VERIFIERS = (verify_access_control,)
+
+# --- classes the structured evidence model made possible ----------------------
+#
+# Each of these needs something the old text-search could not reach: the request
+# that produced a response, or the relationship between two exchanges. They are
+# short because the parsing is done; that is the point of having done it.
+
+
+def verify_open_redirect(finding, ex):
+    """A redirect claim: the Location must actually be attacker-controlled.
+
+    Needs the request, not just the response -- the question is whether a value the
+    caller supplied ended up in Location, and a response alone cannot answer that.
+    """
+    title = _title(finding)
+    if not re.search(r"\b(open redirect|unvalidated redirect|url redirection)\b", title):
+        return None
+
+    resp = ex.get("response") or {}
+    status = resp.get("status", 0)
+    location = em.header(ex, "location")
+    if not location:
+        return _result(INSUFFICIENT, "open_redirect",
+                       "This response sets no Location header.", ex)
+    if not (300 <= status < 400):
+        return _result(INSUFFICIENT, "open_redirect",
+                       f"Location is present but the status is {status}, so no redirect was issued.", ex)
+
+    target = location[0].strip()
+    req = ex.get("request") or {}
+    supplied = [v for vs in (req.get("params") or {}).values() for v in vs]
+    supplied += re.findall(r"=([^&\s]+)", req.get("body") or "")
+
+    external = re.match(r"^(https?:)?//", target) or target.startswith("http")
+    controlled = any(
+        val and (val in target or _unquote(val) in target)
+        for val in supplied
+        if len(val) > 3
+    )
+
+    if external and controlled:
+        return _result(CONFIRMED, "open_redirect",
+                       "A caller-supplied value appears in a Location pointing off-site.",
+                       ex, f"{status} -> {target[:120]}")
+    if external and not controlled:
+        return _result(INSUFFICIENT, "open_redirect",
+                       "The redirect leaves the site, but no request parameter matches the target, so "
+                       "caller control is not shown.", ex, target[:120])
+    if controlled and not external:
+        return _result(REFUTED, "open_redirect",
+                       "The redirect target is caller-influenced but stays on this host, which is not an "
+                       "open redirect.", ex, target[:120])
+    return _result(REFUTED, "open_redirect",
+                   "The redirect is to a fixed same-site location.", ex, target[:120])
+
+
+def _unquote(v):
+    from urllib.parse import unquote
+    try:
+        return unquote(v)
+    except Exception:
+        return v
+
+
+def verify_jwt_alg_none(finding, ex):
+    """A JWT algorithm claim, checked by decoding the token's own header."""
+    title = _title(finding)
+    if not re.search(r"\bjwt\b|json web token|\balg\b", title):
+        return None
+
+    blob = " ".join(
+        [ex.get("raw", "")]
+    )
+    tokens = re.findall(r"\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.?[A-Za-z0-9_-]*", blob)
+    if not tokens:
+        return _result(INSUFFICIENT, "jwt_alg", "No JWT appears in this exchange.", ex)
+
+    import base64
+    import json as _json
+
+    for tok in tokens:
+        head_b64 = tok.split(".")[0]
+        try:
+            pad = head_b64 + "=" * (-len(head_b64) % 4)
+            header = _json.loads(base64.urlsafe_b64decode(pad).decode("utf-8", "replace"))
+        except Exception:
+            continue
+        alg = str(header.get("alg", "")).lower()
+        if not alg:
+            continue
+        if alg == "none":
+            return _result(CONFIRMED, "jwt_alg",
+                           "The token's own header declares alg: none, so its signature is not checked.",
+                           ex, f"header: {header}")
+        if "none" in title or "unsigned" in title:
+            return _result(REFUTED, "jwt_alg",
+                           f"The claim is that the token is unsigned, but its header declares alg: {header.get('alg')}.",
+                           ex, f"header: {header}")
+        return _result(INSUFFICIENT, "jwt_alg",
+                       f"The token declares alg: {header.get('alg')}. Whether it is verified cannot be "
+                       "determined from the token alone.", ex, f"header: {header}")
+    return _result(INSUFFICIENT, "jwt_alg", "A JWT-shaped string is present but its header could not be decoded.", ex)
+
+
+def verify_cacheable_sensitive(finding, ex):
+    """A response carrying a session may not be cached. Needs both directions."""
+    title = _title(finding)
+    if not re.search(r"\bcache\w*|cacheable\b", title):
+        return None
+
+    resp = ex.get("response") or {}
+    if not resp:
+        return _result(INSUFFICIENT, "cacheable", "The bound exchange has no response.", ex)
+
+    cache = " ".join(em.header(ex, "cache-control")).lower()
+    pragma = " ".join(em.header(ex, "pragma")).lower()
+    prevented = any(d in cache for d in ("no-store", "private")) or "no-cache" in pragma or "no-cache" in cache
+
+    authenticated = bool(em.request_header(ex, "authorization") or em.request_header(ex, "cookie"))
+    sets_session = any(
+        re.search(r"\b(session|sid|jsessionid|phpsessid|auth|token)\b", c, re.I)
+        for c in em.header(ex, "set-cookie")
+    )
+
+    if prevented:
+        return _result(REFUTED, "cacheable",
+                       f"The response prevents caching ({cache or pragma}).", ex)
+    if authenticated or sets_session:
+        return _result(CONFIRMED, "cacheable",
+                       "The response carries authenticated content and sets no directive preventing "
+                       "storage, so a shared cache may retain it.", ex,
+                       f"cache-control: {cache or 'absent'}")
+    return _result(INSUFFICIENT, "cacheable",
+                   "No caching directive, but nothing shows the content is user-specific, so this may be "
+                   "correctly cacheable.", ex)
+
+
+_STACK_MARKERS = re.compile(
+    r"(Traceback \(most recent call last\)|\bat [\w.$]+\([\w.]+:\d+\)|"
+    r"\w+Exception\b|\w+Error:\s|Warning: \w+\(\)|"
+    r"ORA-\d{5}|SQLSTATE\[|You have an error in your SQL syntax|"
+    r"System\.\w+Exception|org\.springframework|java\.lang\.|"
+    r"in /\w[\w/]*\.php on line \d+)",
+)
+
+
+def verify_error_disclosure(finding, ex):
+    """A verbose-error claim: the response body must actually contain one."""
+    title = _title(finding)
+    if not re.search(r"\b(stack trace|error (message|disclosure)|verbose error|debug (output|information)|"
+                     r"information disclosure)\b", title):
+        return None
+
+    body = ((ex.get("response") or {}).get("body")) or ""
+    if not body.strip():
+        return _result(INSUFFICIENT, "error_disclosure", "The bound exchange has no response body.", ex)
+
+    m = _STACK_MARKERS.search(body)
+    if m:
+        return _result(CONFIRMED, "error_disclosure",
+                       "The response body contains an interpreter or framework error trace.",
+                       ex, m.group(0)[:120])
+    status = (ex.get("response") or {}).get("status", 0)
+    if status >= 500:
+        return _result(INSUFFICIENT, "error_disclosure",
+                       f"The response is a {status} but its body carries no recognisable trace, so nothing "
+                       "is shown to be disclosed.", ex)
+    return _result(REFUTED, "error_disclosure",
+                   "The response body contains no error trace or diagnostic output.", ex)
+
+
+def verify_session_fixation(finding, exchanges):
+    """Set-level: the session identifier must CHANGE across authentication.
+
+    Cannot be answered by one exchange. The claim is about what happened between
+    two of them, which is only checkable now that they are ordered and parsed.
+    """
+    title = _title(finding)
+    if not re.search(r"session fixation|session (id|identifier) (not )?(re)?generat", title):
+        return None
+
+    def session_of(e):
+        for c in em.header(e, "set-cookie"):
+            m = re.match(r"\s*([\w.-]*(?:session|sid|jsessionid|phpsessid)[\w.-]*)\s*=\s*([^;]+)", c, re.I)
+            if m:
+                return m.group(1), m.group(2).strip()
+        return None, None
+
+    def is_login(e):
+        req = e.get("request") or {}
+        path = (req.get("path") or "").lower()
+        body = (req.get("body") or "").lower()
+        return "login" in path or "signin" in path or "auth" in path or "password=" in body
+
+    issued = [(i, *session_of(e), e) for i, e in enumerate(exchanges)]
+    issued = [t for t in issued if t[1]]
+    if len(issued) < 2:
+        return _result(INSUFFICIENT, "session_fixation",
+                       "Fewer than two session cookies were issued in this evidence, so a change across "
+                       "authentication cannot be observed.")
+
+    login_idx = next((i for i, e in enumerate(exchanges) if is_login(e)), None)
+    if login_idx is None:
+        return _result(INSUFFICIENT, "session_fixation",
+                       "No authentication request is present, so there is nothing to compare across.")
+
+    before = [t for t in issued if t[0] < login_idx]
+    after = [t for t in issued if t[0] >= login_idx]
+    if not before or not after:
+        return _result(INSUFFICIENT, "session_fixation",
+                       "The evidence does not contain a session cookie both before and after the "
+                       "authentication request.")
+
+    if before[-1][2] == after[0][2]:
+        return _result(CONFIRMED, "session_fixation",
+                       f"The {before[-1][1]} value is unchanged across authentication, so a session fixed "
+                       "before login remains valid after it.", after[0][3], before[-1][2][:60])
+    return _result(REFUTED, "session_fixation",
+                   f"The {before[-1][1]} value is regenerated at authentication, which is the correct "
+                   "behaviour.", after[0][3])
+
+
+def verify_rate_limiting(finding, exchanges):
+    """Set-level: repeated identical requests must eventually be refused."""
+    title = _title(finding)
+    if not re.search(r"rate limit|brute[- ]force|account lockout|throttl", title):
+        return None
+
+    usable = [e for e in exchanges if e.get("request") and e.get("response")]
+    if len(usable) < 3:
+        return _result(INSUFFICIENT, "rate_limiting",
+                       f"Only {len(usable)} exchange(s) present. Absence of rate limiting is shown by "
+                       "repetition, so several identical attempts are needed.")
+
+    groups = {}
+    for e in usable:
+        req = e["request"]
+        groups.setdefault((req["method"], req["path"]), []).append(e)
+
+    for (method, path), group in groups.items():
+        if len(group) < 3:
+            continue
+        codes = [(g["response"] or {}).get("status", 0) for g in group]
+        if any(c == 429 for c in codes):
+            return _result(REFUTED, "rate_limiting",
+                           f"{method} {path} was repeated {len(group)} times and answered 429, so requests "
+                           "are being throttled.", group[0], f"statuses: {codes}")
+        if all(200 <= c < 400 for c in codes):
+            return _result(CONFIRMED, "rate_limiting",
+                           f"{method} {path} was repeated {len(group)} times and every attempt was accepted "
+                           f"({', '.join(str(c) for c in codes)}), with no throttling response.",
+                           group[0], f"statuses: {codes}")
+    return _result(INSUFFICIENT, "rate_limiting",
+                   "No single endpoint is repeated enough times in this evidence to show whether attempts "
+                   "are limited.")
+
+
+SET_VERIFIERS = (verify_access_control, verify_session_fixation, verify_rate_limiting)
 
 SINGLE_EXCHANGE_VERIFIERS = (
     verify_missing_header,
@@ -371,6 +628,10 @@ SINGLE_EXCHANGE_VERIFIERS = (
     verify_cors,
     verify_reflection,
     verify_directory_listing,
+    verify_open_redirect,
+    verify_jwt_alg_none,
+    verify_cacheable_sensitive,
+    verify_error_disclosure,
 )
 
 

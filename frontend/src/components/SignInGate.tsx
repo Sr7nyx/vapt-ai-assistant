@@ -3,6 +3,7 @@ import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
 import ReactiveOrb from "./ReactiveOrb";
 import { GithubButton, SourceFooter } from "./SourceLinks";
+import InfoHint from "./InfoHint";
 
 /**
  * Sign-in.
@@ -14,31 +15,40 @@ import { GithubButton, SourceFooter } from "./SourceLinks";
  */
 
 /** Each of these is something in the codebase, not a roadmap item. */
-const GUARDRAILS: { title: string; body: string }[] = [
+/**
+ * The argument, one line each.
+ *
+ * These headings are the message: a visitor decides in about fifteen seconds
+ * whether the rest is worth their attention, and five paragraphs of supporting
+ * prose is not read in fifteen seconds -- it is skipped, taking the headings with
+ * it. The detail sits behind a marker for anyone who wants it, which is the same
+ * treatment the settings page gives its explanations.
+ */
+const GUARDRAILS: { title: string; detail: string }[] = [
   {
     title: "Claims are checked in code, not by asking again",
-    body:
-      "Where a finding can be settled from its evidence -- a header present or absent, a payload reflected raw or encoded, a request answered 200 or 403 -- it is verified by parsing the response. A claim the evidence contradicts can never be auto-confirmed.",
+    detail:
+      "Evidence is parsed into individual HTTP exchanges and each finding is bound to the one it is about. Headers, cookie flags, CORS policy, reflected payloads, redirects, tokens and rate limits are then settled by reading that exchange. A claim the evidence contradicts can never be auto-confirmed, and where the finding cannot be tied to a specific exchange, nothing is checked at all.",
   },
   {
     title: "CVSS is computed, never quoted",
-    body:
-      "Scores come from the vector in code. Model-assigned severity is compared against the computed band and disagreements are surfaced rather than silently resolved.",
+    detail:
+      "Scores come from the vector, in code. Model-assigned severity is compared against the computed band and disagreements are surfaced rather than quietly resolved.",
   },
   {
     title: "A second model argues the other side",
-    body:
-      "A reviewer lane makes the false-positive case for every finding and returns structured signals: evidence grounding, exploitability, confidence.",
+    detail:
+      "A separate reviewer lane makes the false-positive case for every finding and returns structured signals: evidence grounding, exploitability, confidence, and any sign of prompt injection in the source material.",
   },
   {
     title: "The verdict is deterministic",
-    body:
-      "Those signals are combined by a fixed rule into Confirmed, False Positive, or Need Review. Confidence is earned by signals agreeing -- ambiguous findings are held rather than forced.",
+    detail:
+      "Those signals are combined by a fixed rule into Confirmed, False Positive, or Need Review. Confidence is earned by signals agreeing, so ambiguous findings are held rather than forced into a decision.",
   },
   {
     title: "Nothing reaches a report unexamined",
-    body:
-      "Exports run a pre-flight that names what is about to ship and should not be: contradicted claims, unadjudicated findings, missing scores. Every change to a finding is recorded with its actor and rationale.",
+    detail:
+      "Exports run a pre-flight naming what is about to ship and should not be: contradicted claims, findings nobody has adjudicated, missing scores. Every change to a finding is recorded with its actor and rationale.",
   },
 ];
 
@@ -68,8 +78,8 @@ export default function SignInGate() {
                 <span className="text-accent">wrong until the evidence says otherwise.</span>
               </h1>
               <p className="float-in text-muted leading-relaxed mb-8 measure" style={{ animationDelay: "120ms" }}>
-                Takes an engagement from raw evidence and scanner output, through triage, to a
-                client-ready report. The models draft; deterministic checks decide.
+                From raw evidence and scanner output, through triage, to a client-ready report.
+                The models draft; deterministic checks decide.
               </p>
 
 
@@ -78,16 +88,20 @@ export default function SignInGate() {
                   <span className="text-accent">&gt;</span> HOW IT KEEPS THE MODEL HONEST
                 </h2>
               </div>
-              <ol className="grid sm:grid-cols-2 gap-x-8 gap-y-5">
+              <ol className="grid sm:grid-cols-2 gap-x-10 gap-y-3">
                 {GUARDRAILS.map((g, i) => (
-                  <li key={i} className="float-in grid gap-1" style={{ animationDelay: `${140 + i * 90}ms` }}>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[10px] text-border tabular-nums shrink-0">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span className="text-sm text-text">{g.title}</span>
-                    </div>
-                    <p className="text-xs text-muted leading-relaxed pl-6">{g.body}</p>
+                  <li
+                    key={i}
+                    className="float-in flex items-baseline gap-2.5"
+                    style={{ animationDelay: `${140 + i * 80}ms` }}
+                  >
+                    <span className="text-[10px] text-border tabular-nums shrink-0">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="text-sm leading-relaxed">
+                      {g.title}{" "}
+                      <InfoHint label={`About: ${g.title}`}>{g.detail}</InfoHint>
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -154,13 +168,11 @@ export default function SignInGate() {
 
               <p className="text-xs text-muted mt-4 leading-relaxed">
                 Projects and findings are private to your account. Google is used only to sign you
-                in, and nothing is posted on your behalf. The source is MIT licensed and readable
-                without an account.
+                in. MIT licensed, readable without an account.
               </p>
 
               <p className="text-xs text-muted mt-6 leading-relaxed">
-                For authorized security testing only. This deployment is a demonstration &mdash; use
-                synthetic data, not real client data.
+                Authorized testing only. This deployment is a demonstration &mdash; use synthetic data.
               </p>
             </div>
           </div>

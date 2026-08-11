@@ -12,7 +12,7 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second. **281 tests.**
+inline in the test file. The suite runs in about a second. **260 tests.**
 
 ## What each file covers
 
@@ -23,6 +23,8 @@ inline in the test file. The suite runs in about a second. **281 tests.**
 | `test_risk_map.py` | CVSS computation, risk priority, KEV escalation, OWASP/PCI/CWE/ATT&CK mapping | CVSS is computed in code, not taken from the model. Findings with no reliable signal must stay explicitly unmapped rather than be guessed. |
 | `test_qa_utils.py` | Evidence-grounding, severity-mismatch, prompt-injection, reviewer-verdict, and review-summary parsing | These signals are what stop an unverified finding from reaching a report looking like a fact. |
 | `test_review_slice.py` | Reviewer evidence slicing and the excerpt disclosure | The reviewer sees only the input slice bearing on a finding; the slice must keep that finding's own evidence, and the reviewer must be told when it is an excerpt so trimmed context is not read as missing evidence. |
+| `test_evidence_model.py` | Parsing raw text into HTTP exchanges, and binding a finding to the one it is about | Searching a whole submission is only sound when it holds one exchange. With several it produced false confirmations and false refutations from the component the verdict engine trusts above the reviewer. |
+| `test_verifiers_extended.py` | The six classes the structured evidence model unlocked: open redirect, JWT algorithm, cacheable authenticated response, error disclosure, session fixation, rate limiting | Each needs the request or a pair of exchanges, so none was practical before evidence was parsed. Every one is tested against a true positive AND a case it must refute, because a verifier that can only agree is decoration. |
 | `test_verdict_engine.py` | Deterministic status + confidence, and the asymmetric guardrails | Confidence must be earned from signals agreeing, never manufactured. A well-evidenced finding must never be auto-dismissed, and an ungrounded one never auto-confirmed. |
 | `test_audit.py` | Field diffing, value clipping, and that a failing audit write cannot break the operation it records | Findings are mutable and the engine writes to them automatically; a trail that misses changes, or that takes the edit down with it when it fails, is worse than none. |
 | `test_audit_actor.py` | Actor formatting, annotation stripping, and capture of the engine's rationale | Display-only annotations must never reach the database, and the engine's reasoning has to survive the commit or there is no answer to "why is this Confirmed?". |

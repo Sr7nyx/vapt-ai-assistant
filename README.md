@@ -55,9 +55,17 @@ When a finding cannot be tied to a specific exchange, the answer is `INSUFFICIEN
 A verifier that guesses which exchange was meant has reintroduced the bug the
 scoping removes.
 
-Covered today: missing security headers, cookie attributes, CORS policy (including
-origin reflection, which needs the request), reflected payloads with their output
-context, access control across a pair of exchanges, and directory listings. Each parses the actual HTTP evidence -- a header is present
+Twelve classes are covered. Nine are properties of a single exchange: missing
+security headers, cookie attributes, CORS policy (including origin reflection,
+which needs the request), reflected payloads with their output context, open
+redirects, JWT algorithm declarations, cacheable authenticated responses, verbose
+error disclosure, and directory listings.
+
+Three are properties of a *set* of exchanges, and cannot be answered by looking at
+one: access control (one principal reaching another's object), session fixation
+(an identifier surviving authentication), and rate limiting (repetition without
+refusal). Asking which single exchange those belong to has no answer, so they
+examine the whole submission. Each parses the actual HTTP evidence -- a header is present
 or it is not, and no opinion is required to establish which.
 
 `REFUTED` is the valuable outcome: a hallucination caught by code rather than by a
