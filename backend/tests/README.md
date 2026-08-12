@@ -12,12 +12,14 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second. **295 tests.**
+inline in the test file. The suite runs in about a second. **325 tests.**
 
 ## What each file covers
 
 | File | Covers | Why it matters |
 | --- | --- | --- |
+| `test_attack_map.py` | That every weakness class maps to at least one technique, every technique names a tactic, and an unknown class returns NOTHING | A guessed ATT&CK id reads as authoritative and survives into a client's threat model, so refusing to map is the safe answer. |
+| `test_retest.py` | Round coverage, outcome tally, and that remediation is measured against what was retested | Measuring against every finding would report an incomplete round as a poor remediation rate, which is the wrong conclusion from the same data. |
 | `test_finding_identity.py` | What identity must IGNORE across scans: severity, status, session ids, object ids | Treating a re-rated finding as new erases its history at the moment it got worse, and treating a rotated session id as a different URL makes every rescan look like a fresh set. |
 | `test_report_html.py` | That the report is self-contained and that user text is escaped | A report fetching a remote stylesheet is one a client's security team is right to object to, and a report about XSS must not contain XSS. |
 | `test_llm_config.py` | Provider allowlist, https-only, credential rejection, private/loopback/metadata address blocking, lane-config sanitizing | Users supply their own provider URL, which makes the server issue outbound requests to a user-controlled host. Unconstrained, that is an SSRF primitive. |

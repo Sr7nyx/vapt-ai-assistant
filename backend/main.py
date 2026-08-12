@@ -45,6 +45,8 @@ import input_guard
 import exporter
 import report_html
 import finding_identity
+import attack_map
+import retest as retest_mod
 from collections import Counter
 import pg_store as store
 from auth import get_current_user, User
@@ -682,6 +684,36 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
         # The final write is what makes the run recoverable: without it a restart
         # leaves the row saying "running" forever.
         store.save_job(job)
+
+
+@app.get("/projects/{project_id}/retest")
+def retest_campaign(project_id: int, round: Optional[int] = None,
+                    user: User = Depends(get_current_user)):
+    """The state of a retest round for this project.
+
+    A campaign is derived from the retest data already on each finding rather than
+    stored separately, so it cannot drift out of step with the findings it
+    describes.
+    """
+    _require_project(user, project_id)
+    findings = store.get_findings_by_project(user.id, project_id)
+    state = retest_mod.campaign(findings, round)
+    state["delta"] = retest_mod.delta_report(findings, round)
+    state["candidates"] = [
+        {"id": f.get("id"), "title": f.get("title"), "severity": f.get("severity"),
+         "status": f.get("status"), "affected_url": f.get("affected_url")}
+        for f in retest_mod.candidates(findings)
+    ]
+    state["outcomes"] = retest_mod.OUTCOMES
+    return state
+
+
+@app.get("/projects/{project_id}/attack")
+def attack_coverage(project_id: int, user: User = Depends(get_current_user)):
+    """MITRE ATT&CK coverage for this project, grouped by tactic."""
+    _require_project(user, project_id)
+    findings = _annotate(store.get_findings_by_project(user.id, project_id))
+    return attack_map.coverage(findings)
 
 
 @app.get("/jobs")

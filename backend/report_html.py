@@ -13,6 +13,8 @@ The palette is the application's, so a report looks like the tool that produced 
 """
 import html
 import re
+
+import attack_map
 from datetime import datetime, timezone
 
 SEVERITY_COLOUR = {
@@ -147,6 +149,93 @@ td{padding:9px 10px 9px 0;border-bottom:1px solid #25332a66;vertical-align:top}
 """
 
 
+def _attack_section(findings):
+    """ATT&CK coverage, in kill-chain order.
+
+    Included here rather than in every format because HTML is where a reader will
+    actually explore it. The caveat is printed with it: web weaknesses map
+    imperfectly onto a framework built for post-compromise endpoint behaviour, and
+    a mapping presented without that reads as more precise than it is.
+    """
+    cov = attack_map.coverage(findings)
+    if not cov["tactics"]:
+        return ""
+    rows = ""
+    for t in cov["tactics"]:
+        techs = " ".join(
+            f'<span class="chip">{_e(e["id"])} {_e(e["name"])}'
+            + (f' &times;{e["count"]}' if e["count"] > 1 else "")
+            + "</span>"
+            for e in t["techniques"]
+        )
+        rows += (
+            f'<tr><td style="white-space:nowrap"><b>{_e(t["tactic_name"])}</b></td>'
+            f'<td>{techs}</td><td style="text-align:right">{t["count"]}</td></tr>'
+        )
+    note = ""
+    if cov["unmapped"]:
+        note = (f'<div class="note">{cov["unmapped"]} finding'
+                f'{"" if cov["unmapped"] == 1 else "s"} could not be mapped to a technique and are '
+                "left out rather than assigned a nearest match.</div>")
+    return f"""
+<h2>MITRE ATT&amp;CK coverage</h2>
+<table><thead><tr><th>Tactic</th><th>Technique</th><th style="text-align:right">Findings</th></tr></thead>
+<tbody>{rows}</tbody></table>
+<div class="note">Ordered by attack phase rather than by count. Each finding is
+counted once, against the primary technique for its weakness class. Web
+application weaknesses map imperfectly onto ATT&amp;CK, which describes
+post-compromise behaviour on endpoints; this is indicative context, not a
+statement of observed adversary activity.</div>
+{note}"""
+
+
+def _retest_section(findings):
+    """The retest round, when one has happened. A client asks what got fixed."""
+    import retest as retest_mod
+
+    rounds = retest_mod.rounds_present(findings)
+    if not rounds:
+        return ""
+    d = retest_mod.delta_report(findings)
+    if not d["tested_count"]:
+        return ""
+
+    def rows(items, colour):
+        return "".join(
+            f'<tr><td>{_severity_chip(i.get("severity"))}</td>'
+            f'<td>{_e(i.get("title"))}</td></tr>'
+            for i in items
+        )
+
+    blocks = ""
+    for label, items, colour in (
+        ("Regressed", d["regressed"], "#e06c75"),
+        ("Still open", d["still_open"], "#e5a04c"),
+        ("Fixed", d["fixed"], "#7ee787"),
+        ("Risk accepted", d["accepted"], "#5c6b7a"),
+    ):
+        if not items:
+            continue
+        blocks += (
+            f'<div class="blk"><div class="lbl" style="color:{colour}">'
+            f'{label.upper()} &mdash; {len(items)}</div>'
+            f'<table><tbody>{rows(items, colour)}</tbody></table></div>'
+        )
+
+    return f"""
+<h2>Retest &mdash; round {d["round"]}</h2>
+<div class="meta">
+  <div><span>RETESTED</span><b>{d["tested_count"]}</b></div>
+  <div><span>REMEDIATED</span><b>{d["remediation_pct"]}%</b></div>
+  <div><span>COVERAGE</span><b>{d["coverage_pct"]}%</b></div>
+</div>
+{blocks}
+<div class="note">Remediation is measured against what was retested in this round,
+not against every finding, so an incomplete round is not reported as a poor
+remediation rate. Regressions are listed first deliberately: a finding that was
+fixed and has returned matters more than one that was never closed.</div>"""
+
+
 def export_to_html(project, findings, exec_summary, methodology, filepath):
     """Write a single self-contained HTML file."""
     project = project or {}
@@ -221,6 +310,9 @@ def export_to_html(project, findings, exec_summary, methodology, filepath):
 <h2>Findings</h2>
 <table><thead><tr><th>#</th><th>Severity</th><th>Title</th><th>Status</th><th>Asset</th></tr></thead>
 <tbody>{rows or '<tr><td colspan="5">No findings in scope.</td></tr>'}</tbody></table>
+
+{_attack_section(findings)}
+{_retest_section(findings)}
 
 <h2>Detail</h2>
 {details or '<div class="prose">No findings in scope.</div>'}

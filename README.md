@@ -29,6 +29,27 @@ Findings that fail any of these checks are surfaced with a verification flag ins
 
 ---
 
+## Retest rounds, and where findings sit in an attack
+
+Per-finding retest data existed; a retest as an *activity* did not. A round is now
+derived from the findings themselves rather than stored separately, so it cannot
+drift out of step with what it describes. It reports coverage, the outcome tally,
+what is still outstanding, and a delta a client can read: fixed, still open,
+regressed, risk accepted.
+
+Two figures are deliberately separated. Remediation is measured against what was
+*retested*, not against every finding, so an incomplete round is not reported as a
+poor remediation rate. And regressions are listed first, because a finding that was
+fixed and has returned matters more than one that was never closed.
+
+MITRE ATT&CK mapping was one technique per weakness class, with four classes blank.
+It now carries the techniques a weakness *enables*, each with its tactic, and
+project coverage is grouped by tactic in attack-phase order rather than by
+frequency. Nothing is inferred: a class either has a mapping or returns none, since
+a guessed technique reads as authoritative and survives into a client's threat
+model. The report states plainly that web weaknesses map imperfectly onto a
+framework built for post-compromise endpoint behaviour.
+
 ## Recognising a finding across scans
 
 Importing the same scan twice used to produce two unrelated sets of findings, which
@@ -354,6 +375,8 @@ All endpoints require a Google ID token as `Authorization: Bearer <token>` and a
 | `PATCH` `DELETE` | `/findings/{id}` | Update / delete a finding |
 | `POST` | `/findings/bulk-delete` | Delete several findings at once |
 | `GET` | `/jobs` | Recent analysis runs for this account |
+| `GET` | `/projects/{id}/retest` | Retest round state, delta and candidates |
+| `GET` | `/projects/{id}/attack` | MITRE ATT&CK coverage by tactic |
 | `POST` | `/findings/{id}/retest` | Record a retest outcome |
 | `POST` | `/analyze` | Start an analysis job |
 | `POST` | `/llm/precheck` | Whether input looks like evidence, without running anything |

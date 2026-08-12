@@ -24,6 +24,7 @@ specific engagement scope, not an authoritative compliance audit.
 import re
 
 from qa_utils import summarize_qa
+import attack_map
 
 # ---------------------------------------------------------------------------
 # Risk priority (tunable, transparent)
@@ -395,6 +396,8 @@ def map_frameworks(finding):
         return {
             "mapped": False,
             "class": None,
+            "class_key": None,
+            "attack_techniques": [],
             "cwe": f"CWE-{cwe}" if cwe is not None else "",
             "owasp": "",
             "pci": "",
@@ -403,14 +406,23 @@ def map_frameworks(finding):
             "basis": basis,
         }
     info = _CLASS_INFO[klass]
+    # attack_map is authoritative now: it carries a tactic and the techniques a
+    # weakness enables, where _CLASS_INFO held a single id and left four classes
+    # blank. The single string is kept so anything reading `attack` still works.
+    techniques = attack_map.techniques_for(klass)
     return {
         "mapped": True,
+        # `class` is the label a reader sees; `class_key` is the stable identifier
+        # other modules match on. Exposing both avoids changing what `class` means,
+        # which the findings table already displays.
+        "class_key": klass,
+        "attack_techniques": techniques,
         "class": info["label"],
         "cwe": f"CWE-{cwe}" if cwe is not None else "",
         "owasp": OWASP_2025.get(info["owasp"], ""),
         "pci": "PCI DSS v4.0.1 " + info["pci"],
         "nist": info["nist"],
-        "attack": info["attack"],
+        "attack": attack_map.primary(klass) or info["attack"],
         "basis": basis,
     }
 

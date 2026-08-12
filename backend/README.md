@@ -30,6 +30,8 @@ caps at 10-60s, no background workers).
 | `llm_config.py` | Provider allowlist and SSRF validation for user-supplied endpoints |
 | `evidence_model.py` | Parses raw evidence into HTTP exchanges and binds a finding to the one it concerns |
 | `verifiers.py` | Twelve deterministic checks against the bound exchange: CONFIRMED / REFUTED / INSUFFICIENT |
+| `attack_map.py` | MITRE ATT&CK techniques and tactics per weakness class, plus project coverage |
+| `retest.py` | Retest rounds derived from finding history: coverage, tally, client delta |
 | `finding_identity.py` | Cross-scan identity: what is new, regressed, re-rated or no longer reported |
 | `report_html.py` | Self-contained themed HTML report |
 | `verdict_engine.py` | Deterministic status + confidence from the reviewer's signals |
@@ -190,6 +192,8 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | POST | `/scan/parse` | Upload scanner files -> normalized candidates |
 | POST | `/scan/triage` | Start an AI-triage job -> `{job_id}` |
 | GET | `/jobs/{id}` | Poll a background job (owner-scoped) |
+| GET | `/projects/{id}/retest` | Retest round state and delta |
+| GET | `/projects/{id}/attack` | ATT&CK coverage by tactic |
 | GET | `/jobs` | Recent analysis runs |
 | POST | `/projects/{id}/report` | Export a report (html / docx / pdf / xlsx / json); optional `finding_ids` narrows the scope |
 | GET | `/llm/providers` | Allowlisted provider hosts |
