@@ -25,7 +25,7 @@ import threading
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
@@ -43,6 +43,8 @@ import verdict_engine
 import verifiers
 import input_guard
 import exporter
+import report_html
+import finding_identity
 from collections import Counter
 import pg_store as store
 from auth import get_current_user, User
@@ -51,6 +53,9 @@ from auth import get_current_user, User
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.init()
+    # Jobs still marked running are from a process that no longer exists. Left
+    # alone they present as a spinner that never resolves.
+    store.reap_stale_jobs()
     yield
 
 
@@ -207,6 +212,12 @@ _jobs_lock = threading.Lock()
 
 def _new_job(user_id: str) -> str:
     jid = uuid.uuid4().hex
+    try:
+        store.create_job(jid, user_id, kind="analyze")
+    except Exception:
+        # A job that cannot be recorded should still run. The in-memory copy is
+        # what serves this request; the row is what survives a restart.
+        pass
     with _jobs_lock:
         _jobs[jid] = {
             "id": jid, "user_id": user_id, "status": "running", "progress": 0.0,
@@ -222,7 +233,10 @@ def _new_job(user_id: str) -> str:
 
 def _job(jid: str) -> Optional[Dict[str, Any]]:
     with _jobs_lock:
-        return _jobs.get(jid)
+        job = _jobs.get(jid)
+    if job is not None:
+        return job
+    return None
 
 
 # --- Meta --------------------------------------------------------------------
@@ -641,6 +655,10 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
             if not log or log[-1] != text:      # collapse repeats
                 log.append(text)
                 del log[:-400]
+                # Persisted on new lines only. Stage messages can arrive
+                # milliseconds apart, and a write per progress tick would cost
+                # more than the analysis it is recording.
+                store.save_job(job)
 
         # Lane overrides are thread-local, so this job's provider/model choice
         # cannot bleed into any other user's concurrent job.
@@ -661,6 +679,25 @@ def _run_analyze(jid: str, user_id: str, api_key: str, analysis_type: str, raw_i
         job["error"] = str(exc)
     finally:
         job["done"] = True
+        # The final write is what makes the run recoverable: without it a restart
+        # leaves the row saying "running" forever.
+        store.save_job(job)
+
+
+@app.get("/jobs")
+def job_history(user: User = Depends(get_current_user)):
+    """Recent runs for this account.
+
+    Persisted state gives the analyses a history, which is the more useful half of
+    making them durable: LLM usage was already recorded but could not be attributed
+    to a particular run.
+    """
+    rows = store.list_jobs(user.id)
+    for r in rows:
+        for key in ("created_at", "finished_at"):
+            at = r.get(key)
+            r[key] = at.isoformat() if hasattr(at, "isoformat") else (str(at) if at else None)
+    return rows
 
 
 @app.post("/analyze")
@@ -705,7 +742,11 @@ def precheck(body: GuardIn, user: User = Depends(get_current_user)):
 
 
 @app.post("/scan/parse")
-async def scan_parse(files: List[UploadFile] = File(...), user: User = Depends(get_current_user)):
+async def scan_parse(
+    files: List[UploadFile] = File(...),
+    project_id: Optional[int] = Form(default=None),
+    user: User = Depends(get_current_user),
+):
     all_candidates: List[dict] = []
     per_file: List[dict] = []
     warnings: List[str] = []
@@ -724,9 +765,37 @@ async def scan_parse(files: List[UploadFile] = File(...), user: User = Depends(g
     for i, c in enumerate(deduped):
         c["_uid"] = f"scan_{i}"
         c["_risk"] = risk_map.compute_risk_priority(c)["priority"]
+
+    # Compared against what the project already holds. Without this a rescan
+    # produces an entirely new set of findings and nobody can answer the questions
+    # a programme is actually run on: what is new, what came back, what is finally
+    # gone. Identity deliberately ignores severity, so a re-rated finding keeps its
+    # history at the moment it gets worse rather than losing it.
+    delta = None
+    absent = []
+    if project_id:
+        try:
+            _require_project(user, project_id)
+            existing = store.get_findings_by_project(user.id, project_id)
+            deduped, absent, delta = finding_identity.classify(deduped, existing)
+        except HTTPException:
+            raise
+        except Exception:
+            # A comparison failure must not cost the user their parsed scan.
+            delta, absent = None, []
+
     return {
         "candidates": deduped, "removed": removed, "per_file": per_file,
         "warnings": warnings, "summary": scan_import.summarize(deduped),
+        "delta": delta,
+        # Open findings the scan did not report. Never closed automatically: the
+        # scan may simply not have covered them, and a tool that silently marks
+        # findings fixed is worse than one that says nothing.
+        "absent": [
+            {"id": a.get("id"), "title": a.get("title"), "severity": a.get("severity"),
+             "status": a.get("status"), "affected_url": a.get("affected_url")}
+            for a in absent
+        ],
     }
 
 
@@ -744,6 +813,10 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
             if not log or log[-1] != text:      # collapse repeats
                 log.append(text)
                 del log[:-400]
+                # Persisted on new lines only. Stage messages can arrive
+                # milliseconds apart, and a write per progress tick would cost
+                # more than the analysis it is recording.
+                store.save_job(job)
 
         with gemini_client.lane_config(lanes):
             result = gemini_client.triage_findings(api_key, candidates, usage_sink=usage_records, progress_cb=cb)
@@ -760,6 +833,9 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
         job["error"] = str(exc)
     finally:
         job["done"] = True
+        # The final write is what makes the run recoverable: without it a restart
+        # leaves the row saying "running" forever.
+        store.save_job(job)
 
 
 @app.post("/scan/triage")
@@ -814,6 +890,12 @@ def export_report(project_id: int, body: ReportIn, user: User = Depends(get_curr
     elif fmt == "json":
         exporter.export_to_json(project, findings, body.exec_summary, body.methodology, path)
         media = "application/json"
+    elif fmt == "html":
+        # Annotated first: the HTML report is the only format that shows the
+        # deterministic check, and the annotations are added on read rather than
+        # stored.
+        report_html.export_to_html(project, _annotate(findings), body.exec_summary, body.methodology, path)
+        media = "text/html; charset=utf-8"
     else:
         raise HTTPException(status_code=400, detail="Unsupported format")
 

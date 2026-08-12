@@ -28,6 +28,10 @@ caps at 10-60s, no background workers).
 | `pg_store.py` | Multi-tenant Postgres data layer (psycopg3, pgBouncer-friendly) |
 | `gemini_client.py` | Two-lane LLM client: extraction, deterministic CVSS, evidence grounding, skeptical review, triage |
 | `llm_config.py` | Provider allowlist and SSRF validation for user-supplied endpoints |
+| `evidence_model.py` | Parses raw evidence into HTTP exchanges and binds a finding to the one it concerns |
+| `verifiers.py` | Twelve deterministic checks against the bound exchange: CONFIRMED / REFUTED / INSUFFICIENT |
+| `finding_identity.py` | Cross-scan identity: what is new, regressed, re-rated or no longer reported |
+| `report_html.py` | Self-contained themed HTML report |
 | `verdict_engine.py` | Deterministic status + confidence from the reviewer's signals |
 | `qa_utils.py` | Parses reviewer remarks and QA signals into structured fields |
 | `input_guard.py` | Pre-flight check that turns away input which is not security evidence |
@@ -186,7 +190,8 @@ the `sub` claim as the owner key for all data. (With Auth.js, persist
 | POST | `/scan/parse` | Upload scanner files -> normalized candidates |
 | POST | `/scan/triage` | Start an AI-triage job -> `{job_id}` |
 | GET | `/jobs/{id}` | Poll a background job (owner-scoped) |
-| POST | `/projects/{id}/report` | Export a report (docx / pdf / xlsx / json); optional `finding_ids` narrows the scope |
+| GET | `/jobs` | Recent analysis runs |
+| POST | `/projects/{id}/report` | Export a report (html / docx / pdf / xlsx / json); optional `finding_ids` narrows the scope |
 | GET | `/llm/providers` | Allowlisted provider hosts |
 | POST | `/llm/models` | List a provider's models |
 | POST | `/llm/lanes` | Resolved provider + model per lane (no keys returned) |

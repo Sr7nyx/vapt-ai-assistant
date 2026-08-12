@@ -16,8 +16,8 @@ import { verdictOf, sevClass } from "@/components/Severity";
 import { VerdictBadge, VerdictChip, ReviewFlag } from "@/components/ReviewPanel";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
-import { Section } from "@/components/Terminal";
-import { Project, ReviewSummary, VerdictResolution } from "@/lib/types";
+import { Section, Figure } from "@/components/Terminal";
+import { Project, ReviewSummary, VerdictResolution, ScanDelta, AbsentFinding } from "@/lib/types";
 
 // Kept in step with the analyzer: an imported finding and an extracted one land in
 // the same table, so they should get the same defaults.
@@ -40,6 +40,7 @@ type Candidate = Record<string, unknown> & {
   status?: string;
   _review?: unknown;
   _verdict?: unknown;
+  _delta?: unknown;
 };
 
 export default function ImportPage() {
@@ -54,6 +55,8 @@ export default function ImportPage() {
   const [files, setFiles] = useState<FileList | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [summary, setSummary] = useState<Record<string, number> | null>(null);
+  const [delta, setDelta] = useState<ScanDelta | null>(null);
+  const [absent, setAbsent] = useState<AbsentFinding[]>([]);
   const [excludeNoise, setExcludeNoise] = useState(true);
   const [hideFp, setHideFp] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -108,10 +111,18 @@ export default function ImportPage() {
     if (!files || files.length === 0) return;
     setParsing(true);
     try {
-      const r = await api.scanParse(token, files);
+      const r = await api.scanParse(token, files, projectId);
       setCandidates(r.candidates || []);
       setSummary(r.summary || null);
-      notify(`Parsed ${r.summary?.total ?? 0} candidate(s)`, "success");
+      setDelta((r.delta as ScanDelta) || null);
+      setAbsent((r.absent as AbsentFinding[]) || []);
+      const d = r.delta as ScanDelta | null;
+      notify(
+        d
+          ? `Parsed ${r.summary?.total ?? 0}: ${d.new} new, ${d.regressed} regressed`
+          : `Parsed ${r.summary?.total ?? 0} candidate(s)`,
+        "success"
+      );
     } catch (e) {
       notify((e as Error).message, "error");
     } finally {
@@ -260,6 +271,56 @@ export default function ImportPage() {
             </button>
           </div>
 
+          {delta && (
+            <Section
+              title="Since the last scan"
+              note="Compared against findings already in this project."
+            >
+              <div className="grid gap-4">
+                <div className="flex flex-wrap gap-x-10 gap-y-3">
+                  <Figure label="New" value={delta.new} tone={delta.new ? "accent" : undefined} />
+                  <Figure
+                    label="Regressed"
+                    value={delta.regressed}
+                    tone={delta.regressed ? "danger" : undefined}
+                  />
+                  <Figure label="Re-rated" value={delta.reappraised} tone={delta.reappraised ? "warn" : undefined} />
+                  <Figure label="Unchanged" value={delta.unchanged} />
+                </div>
+
+                {delta.regressed > 0 && (
+                  <p className="measure border-l-2 border-danger/70 pl-3 py-0.5 text-sm text-danger">
+                    {delta.regressed} finding{delta.regressed === 1 ? " was" : "s were"} previously
+                    closed and {delta.regressed === 1 ? "has" : "have"} come back. Regressions matter
+                    more than new findings: something that was fixed no longer is.
+                  </p>
+                )}
+
+                {absent.length > 0 && (
+                  <div>
+                    <p className="measure text-xs text-muted mb-2">
+                      {absent.length} open finding{absent.length === 1 ? "" : "s"} did not appear in
+                      this scan. They are not marked fixed automatically &mdash; a scan that did not
+                      cover something is not evidence it is gone.
+                    </p>
+                    <ul className="grid gap-1">
+                      {absent.slice(0, 8).map((a) => (
+                        <li key={a.id} className="flex items-center gap-2 text-xs">
+                          <span className={sevClass(a.severity)}>[{a.severity}]</span>
+                          <span className="truncate">{a.title}</span>
+                          <span className="text-muted shrink-0">{a.status}</span>
+                        </li>
+                      ))}
+                      {absent.length > 8 && (
+                        <li className="text-xs text-muted">+{absent.length - 8} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </Section>
+          )}
+
           <SelectionBar count={sel.count} noun="candidate" onClear={sel.clear}>
             <button
               className="btn-sm"
@@ -316,6 +377,12 @@ export default function ImportPage() {
                       {/* Triaged candidates carry the same assessment the findings
                           table shows, so the two views agree. */}
                       <span className="flex flex-wrap gap-1">
+                        {(c._delta as { state?: string } | undefined)?.state === "regressed" && (
+                          <span className="chip border-danger/70 text-danger">regressed</span>
+                        )}
+                        {(c._delta as { state?: string } | undefined)?.state === "new" && (
+                          <span className="chip border-accent/60 text-accent">new</span>
+                        )}
                         <VerdictBadge verdict={c._verdict as VerdictResolution | undefined} />
                         <VerdictChip review={c._review as ReviewSummary | undefined} />
                         <ReviewFlag review={c._review as ReviewSummary | undefined} />

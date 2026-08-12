@@ -386,9 +386,12 @@ export default function ReportsPage() {
         )}
       </Section>
 
-      <Section title="Export">
+      <Section
+        title="Export"
+        note="HTML opens anywhere, sends as one file, and keeps evidence readable."
+      >
         <div className="flex flex-wrap items-center gap-2">
-          {["docx", "pdf", "xlsx", "json"].map((fmt) => (
+          {["html", "docx", "pdf", "xlsx", "json"].map((fmt) => (
             <button
               key={fmt}
               className="btn"

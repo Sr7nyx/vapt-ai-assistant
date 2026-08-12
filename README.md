@@ -29,6 +29,25 @@ Findings that fail any of these checks are surfaced with a verification flag ins
 
 ---
 
+## Recognising a finding across scans
+
+Importing the same scan twice used to produce two unrelated sets of findings, which
+makes the questions a vulnerability programme is actually run on unanswerable: what
+is new, what has come back, what is finally gone.
+
+Findings now carry an identity computed from the title, CWE, normalised URL,
+parameter and method. Two things it deliberately excludes:
+
+- **Severity.** A finding re-rated from High to Critical is the same finding.
+  Treating it as new would erase its history at the exact moment it got worse.
+- **Volatile URL parts.** Session ids, cache busters and object ids are normalised
+  away, because otherwise a rescan looks like an entirely fresh set of findings.
+
+An import against a project reports `new`, `regressed`, `reappraised` and
+`unchanged`, and lists open findings the scan did not report. Those are never
+closed automatically: a scan that did not cover something is not evidence it is
+gone.
+
 ## Checking claims instead of asking twice
 
 The skeptical reviewer is a second model auditing the first, which would leave the
@@ -145,7 +164,7 @@ non-zero if the engine ever dismisses a real finding.
 **Workflow and reporting**
 - Multi-project workspace with per-user isolation
 - Filterable findings list with expandable detail, inline editing, multi-select bulk actions, and retest recording (outcome, retester, date, evidence, notes) across rounds
-- Export to DOCX, PDF, XLSX, and JSON, enriched with risk, framework, and retest data, over the whole project or a chosen subset of findings
+- Export to HTML, DOCX, PDF, XLSX, and JSON, enriched with risk, framework, and retest data, over the whole project or a chosen subset of findings
 - A pre-flight check on the export itself: before a report is generated it reports what is about to ship that probably should not — findings a deterministic check contradicted, findings already marked false positive, findings carrying verification flags, findings nobody has adjudicated, and findings with no computed score. Nothing is blocked, since a tester may have good reason to include any of it, but the serious cases require a deliberate acknowledgement rather than a click that could be muscle memory
 - Aggregate dashboard across all projects: severity/status/category breakdowns, risk priorities, OWASP coverage, verification flags, and token usage
 
@@ -334,6 +353,7 @@ All endpoints require a Google ID token as `Authorization: Bearer <token>` and a
 | `POST` | `/projects/{id}/findings/commit` | Bulk-commit scanner candidates with asset-aware dedup |
 | `PATCH` `DELETE` | `/findings/{id}` | Update / delete a finding |
 | `POST` | `/findings/bulk-delete` | Delete several findings at once |
+| `GET` | `/jobs` | Recent analysis runs for this account |
 | `POST` | `/findings/{id}/retest` | Record a retest outcome |
 | `POST` | `/analyze` | Start an analysis job |
 | `POST` | `/llm/precheck` | Whether input looks like evidence, without running anything |

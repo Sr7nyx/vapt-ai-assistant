@@ -12,12 +12,14 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second. **260 tests.**
+inline in the test file. The suite runs in about a second. **295 tests.**
 
 ## What each file covers
 
 | File | Covers | Why it matters |
 | --- | --- | --- |
+| `test_finding_identity.py` | What identity must IGNORE across scans: severity, status, session ids, object ids | Treating a re-rated finding as new erases its history at the moment it got worse, and treating a rotated session id as a different URL makes every rescan look like a fresh set. |
+| `test_report_html.py` | That the report is self-contained and that user text is escaped | A report fetching a remote stylesheet is one a client's security team is right to object to, and a report about XSS must not contain XSS. |
 | `test_llm_config.py` | Provider allowlist, https-only, credential rejection, private/loopback/metadata address blocking, lane-config sanitizing | Users supply their own provider URL, which makes the server issue outbound requests to a user-controlled host. Unconstrained, that is an SSRF primitive. |
 | `test_scan_import.py` | Burp, ZAP, Nessus, Nmap, and CSV parsing; severity normalization; CWE extraction; dedup; noise summary; malformed input | Parsers take untrusted scanner output. A wrong severity or a fabricated CWE propagates all the way into a client report. |
 | `test_risk_map.py` | CVSS computation, risk priority, KEV escalation, OWASP/PCI/CWE/ATT&CK mapping | CVSS is computed in code, not taken from the model. Findings with no reliable signal must stay explicitly unmapped rather than be guessed. |

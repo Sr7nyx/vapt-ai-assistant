@@ -90,9 +90,11 @@ export const api = {
   scanTriage: (t: string | undefined, body: unknown) => req<{ job_id: string }>(t, "POST", "/scan/triage", body),
   getJob: (t: string | undefined, id: string) => req<Job>(t, "GET", `/jobs/${id}`),
 
-  scanParse: async (t: string | undefined, files: FileList | File[]) => {
+  scanParse: async (t: string | undefined, files: FileList | File[], projectId?: number | null) => {
     const fd = new FormData();
     Array.from(files).forEach((f) => fd.append("files", f));
+    // Sent so the backend can compare against what the project already holds.
+    if (projectId) fd.append("project_id", String(projectId));
     const res = await fetch(`${BASE}/scan/parse`, {
       method: "POST",
       headers: t ? { Authorization: `Bearer ${t}` } : {},

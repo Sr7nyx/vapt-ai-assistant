@@ -137,3 +137,33 @@ export interface Verification {
   exchange_id?: string;
   exchange_count?: number;
 }
+
+export interface ScanDelta {
+  new: number;
+  regressed: number;
+  unchanged: number;
+  reappraised: number;
+  absent: number;
+}
+
+export interface AbsentFinding {
+  id: number;
+  title: string;
+  severity: string;
+  status: string;
+  affected_url?: string;
+}
+
+export interface JobHistoryRow {
+  id: string;
+  project_id?: number | null;
+  kind: string;
+  status: string;
+  progress: number;
+  stage: string;
+  error?: string;
+  finding_count: number;
+  total_tokens: number;
+  created_at: string;
+  finished_at?: string | null;
+}

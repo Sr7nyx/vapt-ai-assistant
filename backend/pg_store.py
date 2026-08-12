@@ -137,6 +137,25 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_events_finding ON finding_events(finding_id, id)",
     "CREATE INDEX IF NOT EXISTS idx_events_user ON finding_events(user_id, id)",
+    """
+    CREATE TABLE IF NOT EXISTS jobs (
+        id          TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        project_id  INTEGER,
+        kind        TEXT DEFAULT '',
+        status      TEXT DEFAULT 'running',
+        progress    REAL DEFAULT 0,
+        stage       TEXT DEFAULT '',
+        log         TEXT DEFAULT '',
+        result      TEXT DEFAULT '',
+        error       TEXT DEFAULT '',
+        finding_count INTEGER DEFAULT 0,
+        total_tokens  INTEGER DEFAULT 0,
+        created_at  TIMESTAMPTZ DEFAULT now(),
+        finished_at TIMESTAMPTZ
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, created_at DESC)",
 
     # --- Row level security ------------------------------------------------
     # Supabase publishes every table in the public schema through PostgREST,
@@ -756,3 +775,103 @@ def get_finding_events(user_id, finding_id, limit=200):
         """,
         (user_id, finding_id, int(limit)),
     )
+
+
+# --- job durability -----------------------------------------------------------
+# Jobs lived only in a process dictionary, so a restart -- routine on a free tier
+# that spins down when idle -- destroyed any analysis in flight. The user saw a
+# spinner that never resolved: no result, no error, and no record it ever ran.
+#
+# Persisted state also gives the run a history, which is the more useful half. LLM
+# usage was already recorded but could not be attributed to a particular analysis.
+
+def create_job(job_id, user_id, kind="analyze", project_id=None):
+    _exec(
+        "INSERT INTO jobs (id, user_id, project_id, kind, status) VALUES (%s, %s, %s, %s, 'running')",
+        (job_id, user_id, project_id, kind),
+    )
+
+
+def save_job(job):
+    """Persist a running job's progress. Failures are swallowed: losing a progress
+    write must never take down the analysis it is describing."""
+    import json as _json
+    try:
+        _exec(
+            """
+            UPDATE jobs SET status = %s, progress = %s, stage = %s, log = %s,
+                            result = %s, error = %s, finding_count = %s,
+                            total_tokens = %s,
+                            finished_at = CASE WHEN %s THEN now() ELSE finished_at END
+            WHERE id = %s
+            """,
+            (
+                job.get("status", "running"),
+                float(job.get("progress") or 0),
+                str(job.get("stage") or "")[:500],
+                _json.dumps(job.get("log") or [])[:200000],
+                _json.dumps(job.get("result")) if job.get("done") else "",
+                str(job.get("error") or "")[:2000],
+                len(job.get("result") or []) if isinstance(job.get("result"), list) else 0,
+                int(job.get("total_tokens") or 0),
+                bool(job.get("done")),
+                job.get("id"),
+            ),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def get_job(user_id, job_id):
+    import json as _json
+    row = _one("SELECT * FROM jobs WHERE id = %s AND user_id = %s", (job_id, user_id))
+    if not row:
+        return None
+    out = dict(row)
+    for key in ("log", "result"):
+        raw = out.get(key)
+        try:
+            out[key] = _json.loads(raw) if raw else ([] if key == "log" else None)
+        except Exception:
+            out[key] = [] if key == "log" else None
+    out["done"] = out.get("status") in ("done", "error")
+    return out
+
+
+def list_jobs(user_id, limit=25):
+    """Recent runs, without their logs or results -- a history view needs the
+    shape of each run, not its full transcript."""
+    return _all(
+        """
+        SELECT id, project_id, kind, status, progress, stage, error,
+               finding_count, total_tokens, created_at, finished_at
+        FROM jobs WHERE user_id = %s ORDER BY created_at DESC LIMIT %s
+        """,
+        (user_id, int(limit)),
+    )
+
+
+def reap_stale_jobs(older_than_minutes=30):
+    """Mark jobs that were running when the process died.
+
+    A job still 'running' long after its container restarted is not running at all,
+    and leaving it that way is what produces a spinner with no end. Called once at
+    startup rather than on a timer: the only thing that strands a job is a restart,
+    and this runs on exactly that event.
+    """
+    try:
+        _exec(
+            """
+            UPDATE jobs
+            SET status = 'error',
+                error = 'The server restarted while this job was running.',
+                finished_at = now()
+            WHERE status = 'running'
+              AND created_at < now() - make_interval(mins => %s)
+            """,
+            (int(older_than_minutes),),
+        )
+        return True
+    except Exception:
+        return False
