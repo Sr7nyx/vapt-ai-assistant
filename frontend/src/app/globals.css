@@ -169,16 +169,28 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   /* Interactive elements are bracketed, the way a terminal marks an actionable
      token. Buttons whose label is an icon opt out with .btn-icon. */
   .btn {
-    @apply bg-transparent border border-accent text-accent font-medium px-3 py-1.5 rounded-lg text-sm tracking-wide transition-all
+    @apply bg-transparent border border-accent text-accent px-3.5 py-1.5 rounded-md text-sm tracking-wide transition-all
            hover:bg-accent hover:text-black active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
   }
+  /* A secondary control sat at text-sm -- the same size as the primary .btn -- so
+     "small" was only smaller in padding. Row actions now match the text they sit
+     beside, and a disabled one no longer offers a hover it cannot honour. */
   .btn-sm {
-    @apply border border-border text-sm px-2.5 py-1 rounded-lg tracking-wide transition-all
-           hover:border-accent hover:text-accent active:scale-[0.98] disabled:opacity-40;
+    @apply border border-border text-xs px-2.5 py-1 rounded-md tracking-wide transition-all
+           active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-sm:hover:not(:disabled) {
+    @apply border-accent text-accent;
+  }
+  .btn-sm:disabled {
+    @apply cursor-default;
   }
   .btn-sm-danger {
-    @apply border border-border text-sm px-2.5 py-1 rounded-lg text-danger tracking-wide transition-all
-           hover:border-danger active:scale-[0.98];
+    @apply border border-border text-xs px-2.5 py-1 rounded-md tracking-wide transition-all
+           active:scale-[0.98] disabled:opacity-40;
+  }
+  .btn-sm-danger:hover:not(:disabled) {
+    @apply border-danger text-danger;
   }
   .btn:not(.btn-icon)::before,
   .btn-sm:not(.btn-icon)::before,

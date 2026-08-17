@@ -57,41 +57,100 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="animate-in mx-auto w-full max-w-5xl">
-
+    <div className="animate-in mx-auto w-full max-w-5xl grid gap-10">
+      {/* Labelled fields on one row, matching the analyzer and importer. Three
+          unlabelled full-width inputs relying on placeholders looked like a
+          different application, and a placeholder disappears the moment you type,
+          which leaves no way to tell the fields apart. */}
       <Section title="New project">
-        <div className="grid gap-3">
-        <input className="input" placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className="input" placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
-        <input className="input" placeholder="Scope" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} />
-        <div>
-          <button className="btn" onClick={create} disabled={creating}>
+        <div className="grid gap-4">
+          <div className="grid sm:grid-cols-3 gap-x-3 gap-y-3">
+            <label className="field-inline">
+              <span>NAME</span>
+              <input
+                className="input"
+                placeholder="acme-web-2026"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </label>
+            <label className="field-inline">
+              <span>CLIENT</span>
+              <input
+                className="input"
+                placeholder="Acme Ltd"
+                value={form.client}
+                onChange={(e) => setForm({ ...form, client: e.target.value })}
+              />
+            </label>
+            <label className="field-inline">
+              <span>SCOPE</span>
+              <input
+                className="input"
+                placeholder="app.acme.test"
+                value={form.scope}
+                onChange={(e) => setForm({ ...form, scope: e.target.value })}
+              />
+            </label>
+          </div>
+          <button className="btn w-fit" onClick={create} disabled={creating || !form.name.trim()}>
             {creating ? "Creating…" : "Create project"}
           </button>
         </div>
-        </div>
       </Section>
 
-      <Section title="Projects">
-      {loading ? (
-        <Skeleton rows={3} />
-      ) : (
-        <div className="grid gap-2">
-          {projects.map((p) => (
-            <div key={p.id} className={`card flex items-center justify-between ${projectId === p.id ? "border-accent" : ""}`}>
-              <div className="min-w-0">
-                <div className="font-medium truncate">{p.name}</div>
-                <div className="text-xs text-muted truncate">{p.client}</div>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button className="btn-sm" onClick={() => setProjectId(p.id)}>{projectId === p.id ? "Selected" : "Select"}</button>
-                <button className="btn-sm-danger" onClick={() => del(p)}>Delete</button>
-              </div>
-            </div>
-          ))}
-          {projects.length === 0 && <p className="text-muted text-sm">No projects yet.</p>}
-        </div>
-      )}
+      <Section
+        title="Projects"
+        note={projects.length ? `${projects.length} in this account.` : undefined}
+      >
+        {loading ? (
+          <Skeleton rows={3} />
+        ) : projects.length === 0 ? (
+          <p className="measure text-sm text-muted">
+            No projects yet. A project holds an engagement&rsquo;s findings, and everything else in
+            the console works against the one selected in the header.
+          </p>
+        ) : (
+          /* Ruled rows, not cards. A card per project reads as five stacked
+             containers; the findings and retest lists already use rules, and this
+             is the same kind of list. */
+          <ul className="grid gap-0">
+            {projects.map((p) => {
+              const active = projectId === p.id;
+              return (
+                <li
+                  key={p.id}
+                  className={`flex items-center gap-3 py-2.5 border-b border-border/40 last:border-0 ${
+                    active ? "bg-accent/5" : ""
+                  }`}
+                >
+                  <span className={`w-2 shrink-0 ${active ? "text-highlight" : "text-transparent"}`}>
+                    &gt;
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-sm ${active ? "text-accent" : ""}`}>
+                      {p.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted">
+                      {p.client || "no client recorded"}
+                      {p.scope ? ` · ${p.scope}` : ""}
+                    </span>
+                  </span>
+                  <button
+                    className="btn-sm shrink-0"
+                    onClick={() => setProjectId(p.id)}
+                    disabled={active}
+                  >
+                    {active ? "Selected" : "Select"}
+                  </button>
+                  <button className="btn-sm-danger shrink-0" onClick={() => del(p)}>
+                    Delete
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Section>
     </div>
   );

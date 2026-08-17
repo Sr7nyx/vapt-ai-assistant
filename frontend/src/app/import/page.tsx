@@ -183,7 +183,7 @@ export default function ImportPage() {
   const triaging = !!job && !job.done;
 
   return (
-    <div className="animate-in">
+    <div className="animate-in grid gap-8">
 
       <LaneStatus activeLane={running ? "REVIEW" : null} />
       <DemoQuotaBanner refreshKey={quotaTick} />

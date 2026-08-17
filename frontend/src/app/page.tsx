@@ -61,7 +61,7 @@ export default function Dashboard() {
 
   if (loading || !data) {
     return (
-      <div className="animate-in">
+      <div className="animate-in grid gap-8">
         <Skeleton rows={6} />
       </div>
     );

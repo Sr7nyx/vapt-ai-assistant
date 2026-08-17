@@ -159,7 +159,7 @@ export default function ReportsPage() {
 
   if (!projectId) {
     return (
-      <div className="animate-in mx-auto w-full max-w-3xl">
+      <div className="animate-in mx-auto w-full max-w-3xl grid gap-8">
         <div className="card text-muted text-sm">Select a project first.</div>
       </div>
     );

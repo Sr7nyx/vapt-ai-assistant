@@ -57,7 +57,7 @@ export default function RetestPage() {
 
   if (!projectId) {
     return (
-      <div className="animate-in mx-auto w-full max-w-5xl">
+      <div className="animate-in mx-auto w-full max-w-5xl grid gap-10">
         <div className="card text-muted text-sm">
           Select a project to see its retest rounds.
         </div>

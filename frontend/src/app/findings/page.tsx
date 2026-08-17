@@ -13,6 +13,7 @@ import RetestModal from "@/components/RetestModal";
 import MultiSelect from "@/components/MultiSelect";
 import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag, VerifiedChip } from "@/components/ReviewPanel";
 import AuditTrail from "@/components/AuditTrail";
+import { Section } from "@/components/Terminal";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
 
@@ -125,47 +126,52 @@ export default function FindingsPage() {
   };
 
   return (
-    <div className="animate-in">
-
-      <label className="grid gap-1.5 mb-4">
-        <span className="text-sm text-muted">Project</span>
-        <select className="input" value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">— no project selected —</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-              {p.client ? ` (${p.client})` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-
+    <div className="animate-in grid gap-8">
+      {/* Filters live on the section rule, the way the reports page does it: they
+          belong to the list they narrow rather than floating above it as three
+          text-sm labels, which was the size mismatch with the rest of the app. */}
+      <Section
+        title="Findings"
+        note={projectId ? `Showing ${shown.length} of ${findings.length}.` : undefined}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="field-inline">
+              <select
+                className="input"
+                value={projectId ?? ""}
+                onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">no project selected</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.client ? ` (${p.client})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {projectId && (
+              <button
+                className="btn-sm"
+                onClick={() => setEditing({ title: "", severity: "Medium", status: "Need Review", category: "Web Application/API Vulnerability" })}
+              >
+                Add finding
+              </button>
+            )}
+          </div>
+        }
+      >
       {!projectId ? (
-        <div className="card text-muted text-sm">Select a project to view its findings.</div>
+        <p className="measure text-sm text-muted">
+          Select a project to view its findings. Everything in the console works against the
+          project chosen in the header.
+        </p>
       ) : (
         <>
-          <div className="flex justify-end mb-4">
-            <button
-              className="btn-sm"
-              onClick={() => setEditing({ title: "", severity: "Medium", status: "Need Review", category: "Web Application/API Vulnerability" })}
-            >
-              + Add finding
-            </button>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <div className="text-sm text-muted mb-1.5">Filter severity</div>
-              <MultiSelect options={sevOptions} selected={sevF} onChange={setSevF} />
-            </div>
-            <div>
-              <div className="text-sm text-muted mb-1.5">Filter status</div>
-              <MultiSelect options={statusOptions} selected={statusF} onChange={setStatusF} />
-            </div>
-            <div>
-              <div className="text-sm text-muted mb-1.5">Filter category</div>
-              <MultiSelect options={catOptions} selected={catF} onChange={setCatF} />
-            </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <MultiSelect placeholder="Severity" options={sevOptions} selected={sevF} onChange={setSevF} />
+            <MultiSelect placeholder="Status" options={statusOptions} selected={statusF} onChange={setStatusF} />
+            <MultiSelect placeholder="Category" options={catOptions} selected={catF} onChange={setCatF} />
           </div>
 
           <div className="flex items-center gap-4 mb-3">
@@ -175,9 +181,7 @@ export default function FindingsPage() {
               onToggle={sel.toggleAll}
               label="SELECT ALL"
             />
-            <span className="text-sm text-muted">
-              Showing {shown.length} of {findings.length} finding(s).
-            </span>
+
           </div>
 
           <SelectionBar count={sel.count} noun="finding" onClear={sel.clear}>
@@ -189,7 +193,7 @@ export default function FindingsPage() {
           {loading ? (
             <Skeleton rows={6} />
           ) : shown.length === 0 ? (
-            <div className="card text-muted text-sm">No findings match.</div>
+            <p className="text-sm text-muted">No findings match these filters.</p>
           ) : (
             <div className="grid gap-2">
               {shown.map((f) => {
@@ -309,6 +313,7 @@ export default function FindingsPage() {
           }}
         />
       )}
+      </Section>
     </div>
   );
 }
