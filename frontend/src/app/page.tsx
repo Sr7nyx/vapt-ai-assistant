@@ -9,6 +9,8 @@ import { SeverityBar, BarList } from "@/components/Charts";
 import { swr, readCache } from "@/lib/cache";
 import { Section, Figure } from "@/components/Terminal";
 import ReactiveOrb from "@/components/ReactiveOrb";
+import AttackStrip from "@/components/AttackStrip";
+import { useProject } from "@/lib/ProjectContext";
 
 /**
  * Overview.
@@ -33,6 +35,7 @@ export default function Dashboard() {
   const token = session?.id_token;
   const [data, setData] = useState<Overview | null>(() => readCache<Overview>("overview") ?? null);
   const [loading, setLoading] = useState(() => !readCache<Overview>("overview"));
+  const { projectId } = useProject();
   const [usageWindow, setUsageWindow] = useState("all");
   const [usage, setUsage] = useState<UsageSummary | null>(null);
 
@@ -86,17 +89,13 @@ export default function Dashboard() {
         <Section title="Severity">
           <SeverityBar rows={data.by_severity} />
         </Section>
-        {/* Decorative only: no labels, and the particle count scales itself down
-            to this box so it stays a sphere rather than a solid disc. */}
-        <div
-           className="hidden lg:block w-52 shrink-0 -mt-5 opacity-100"
-           style={{
-             filter:
-               "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
-          }}
-        >
-          <ReactiveOrb showLabels={false} />
-      </div>
+        {/* Not decoration: the particles take severity colours in proportion to
+            the real counts, so the orb shows the shape of the project's risk. It
+            sits beside the severity bar because it is the same fact, read a
+            different way. */}
+        <div className="hidden lg:block w-48 shrink-0 -mt-4" title="Particle colour reflects the severity mix">
+          <ReactiveOrb showLabels={false} severity={data.by_severity} />
+        </div>
       </div>
 
       {/* Risk sits beside severity because the interesting fact is the DIFFERENCE
@@ -141,6 +140,13 @@ export default function Dashboard() {
             </p>
           )}
         </div>
+      </Section>
+
+      <Section
+        title="ATT&amp;CK coverage"
+        note="Where this project's findings sit in an attack, by tactic."
+      >
+        <AttackStrip projectId={projectId} />
       </Section>
 
       <Section title="LLM usage">

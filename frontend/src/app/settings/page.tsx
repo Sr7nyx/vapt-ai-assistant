@@ -9,6 +9,7 @@ import { GithubButton, SourceFooter, GithubMark, REPO_URL } from "@/components/S
 import InfoHint, { LabelWithHint } from "@/components/InfoHint";
 import { Section } from "@/components/Terminal";
 import { getMotion, setMotion, MotionSetting } from "@/lib/motion";
+import RunHistory from "@/components/RunHistory";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
@@ -102,7 +103,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="animate-in mx-auto w-full max-w-3xl">
+    <div className="animate-in mx-auto w-full max-w-3xl grid gap-10">
 
       <Section title="Model configuration" actions={<>          <InfoHint label="About model configuration">
             The pipeline uses two model lanes. Anything left blank falls back to the server configuration.
@@ -300,6 +301,19 @@ export default function SettingsPage() {
           </p>
         </fieldset>
         </div>
+      </Section>
+
+      <Section
+        title="Run history"
+        actions={
+          <InfoHint label="About run history">
+            Analyses are recorded so they survive a server restart. This is the other half of
+            that: LLM usage was already logged but could not be attributed to a particular run,
+            so there was no way to see what one cost.
+          </InfoHint>
+        }
+      >
+        <RunHistory />
       </Section>
 
       <Section title="Account" actions={<>          <InfoHint label="Connection details">

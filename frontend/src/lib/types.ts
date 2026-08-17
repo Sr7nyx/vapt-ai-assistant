@@ -167,3 +167,59 @@ export interface JobHistoryRow {
   created_at: string;
   finished_at?: string | null;
 }
+
+export interface RetestOutcome {
+  id: number;
+  title: string;
+  severity: string;
+  outcome: string;
+  date: string;
+  retester: string;
+  note: string;
+}
+
+export interface RetestCandidate {
+  id: number;
+  title: string;
+  severity: string;
+  status: string;
+  affected_url?: string;
+}
+
+export interface RetestDelta {
+  round: number;
+  coverage_pct: number;
+  fixed: RetestOutcome[];
+  still_open: RetestOutcome[];
+  regressed: RetestOutcome[];
+  accepted: RetestOutcome[];
+  outstanding: RetestCandidate[];
+  remediation_pct: number;
+  tested_count: number;
+}
+
+export interface RetestCampaign {
+  round: number;
+  known_rounds: { round: number; count: number; first_date: string; last_date: string; testers: string[] }[];
+  tested: RetestOutcome[];
+  outstanding: RetestCandidate[];
+  tally: Record<string, number>;
+  total: number;
+  covered: number;
+  coverage_pct: number;
+  delta: RetestDelta;
+  candidates: RetestCandidate[];
+  outcomes: Record<string, string>;
+}
+
+export interface AttackTactic {
+  tactic: string;
+  tactic_name: string;
+  techniques: { id: string; name: string; count: number }[];
+  count: number;
+}
+
+export interface AttackCoverage {
+  tactics: AttackTactic[];
+  unmapped: number;
+}

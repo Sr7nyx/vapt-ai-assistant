@@ -26,6 +26,7 @@ const TABS = [
   { href: "/analyzer", label: "ANALYZER" },
   { href: "/import", label: "IMPORT" },
   { href: "/findings", label: "FINDINGS" },
+  { href: "/retest", label: "RETEST" },
   { href: "/reports", label: "REPORTS" },
   { href: "/settings", label: "SETTINGS" },
 ];
