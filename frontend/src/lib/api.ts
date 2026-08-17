@@ -1,6 +1,14 @@
 import {
-  Project, Finding, Job, Overview, LaneInfo, FindingEvent, UsageSummary,
-  JobHistoryRow, RetestCampaign, AttackCoverage,
+  Project,
+  Finding,
+  Job,
+  Overview,
+  LaneInfo,
+  FindingEvent,
+  UsageSummary,
+  JobHistoryRow,
+  RetestCampaign,
+  AttackCoverage,
 } from "./types";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
@@ -85,13 +93,13 @@ export const api = {
   deleteFinding: (t: string | undefined, id: number) => req<unknown>(t, "DELETE", `/findings/${id}`),
   bulkDeleteFindings: (t: string | undefined, ids: number[]) =>
     req<{ deleted: number; missing: number }>(t, "POST", "/findings/bulk-delete", { ids }),
+  findingEvents: (t: string | undefined, id: number) =>
+    req<FindingEvent[]>(t, "GET", `/findings/${id}/events`),
   listJobs: (t: string | undefined) => req<JobHistoryRow[]>(t, "GET", "/jobs"),
   retestCampaign: (t: string | undefined, pid: number, round?: number) =>
     req<RetestCampaign>(t, "GET", `/projects/${pid}/retest${round ? `?round=${round}` : ""}`),
   attackCoverage: (t: string | undefined, pid: number) =>
     req<AttackCoverage>(t, "GET", `/projects/${pid}/attack`),
-  findingEvents: (t: string | undefined, id: number) =>
-    req<FindingEvent[]>(t, "GET", `/findings/${id}/events`),
   retestFinding: (t: string | undefined, id: number, body: unknown) => req<unknown>(t, "POST", `/findings/${id}/retest`, body),
 
   analyze: (t: string | undefined, body: unknown) => req<{ job_id: string }>(t, "POST", "/analyze", body),

@@ -168,6 +168,20 @@ export interface JobHistoryRow {
   finished_at?: string | null;
 }
 
+export interface JobHistoryRow {
+  id: string;
+  project_id?: number | null;
+  kind: string;
+  status: string;
+  progress: number;
+  stage: string;
+  error?: string;
+  finding_count: number;
+  total_tokens: number;
+  created_at: string;
+  finished_at?: string | null;
+}
+
 export interface RetestOutcome {
   id: number;
   title: string;
