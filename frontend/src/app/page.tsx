@@ -61,7 +61,7 @@ export default function Dashboard() {
 
   if (loading || !data) {
     return (
-      <div className="animate-in grid lg:grid-cols-[minmax(0,1fr)_13rem] gap-x-10 items-start">
+      <div className="animate-in grid gap-9">
         <Skeleton rows={6} />
       </div>
     );
@@ -73,14 +73,13 @@ export default function Dashboard() {
   const unmapped = data.owasp_coverage.find((r) => r.label === "Unmapped (assign manually)");
 
   return (
-    <div className="animate-in grid lg:grid-cols-[minmax(0,1fr)_13rem] gap-x-10 items-start">
+    <div className="animate-in grid gap-9">
       {/* THE ORB RAIL. Its own column rather than a slot inside one section, so it
           is present the whole way down the page and does not take horizontal room
           from the figures. Sticky, because a decoration that scrolls away has
           nothing to say about the section you have scrolled to.
 
           Untouched otherwise: same component, same props, no styling changes. */}
-      <div className="grid gap-9 min-w-0">
         {/* 1. WHERE TO START.
 
             Risk priority leads, with severity beside it. Severity answers "how bad";
@@ -88,6 +87,10 @@ export default function Dashboard() {
             probability, KEV and environment. Pairing them is the point: the two
             differing is the interesting fact, and two sections apart nobody notices
             that five Criticals produced no Urgents. */}
+      {/* The orb sits beside the lead section, exactly as before: static, decorative,
+          aria-hidden inside the component, and hidden below lg where there is no
+          room for it. Unchanged from the previous layout. */}
+      <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
         <Section
           title="Where to start"
           note="Risk blends CVSS with exploit probability and environment. Severity is the raw rating."
@@ -120,8 +123,18 @@ export default function Dashboard() {
             )}
           </div>
         </Section>
+        <div
+          className="hidden lg:block w-52 shrink-0 -mt-5"
+          style={{
+            filter:
+              "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
+          }}
+        >
+          <ReactiveOrb showLabels={false} />
+        </div>
+      </div>
 
-        {/* 2. THE SAME SET, THREE WAYS. */}
+      {/* 2. THE SAME SET, THREE WAYS. */}
         <Section title="Breakdown">
           <div className="flex flex-wrap gap-x-14 gap-y-8">
             <Table col="Status" rows={data.by_status} />
@@ -210,28 +223,7 @@ export default function Dashboard() {
             </tbody>
           </table>
         )}
-        </Section>
-      </div>
-
-      {/* The orb rail.
-
-          Its own column rather than a slot inside one section: it is present the
-          whole way down the page and takes no horizontal room from the figures.
-          Sticky, because a decoration that scrolls away has nothing to say about
-          the section you have scrolled to.
-
-          The component is untouched -- same props, same styling as before. */}
-      <div className="hidden lg:block sticky top-6 justify-self-center">
-        <div
-          className="w-52"
-          style={{
-            filter:
-              "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
-          }}
-        >
-          <ReactiveOrb showLabels={false} />
-        </div>
-      </div>
+      </Section>
     </div>
   );
 }
