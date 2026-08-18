@@ -96,17 +96,21 @@ export default function Dashboard() {
           note="Risk blends CVSS with exploit probability and environment. Severity is the raw rating."
         >
           <div className="grid gap-5">
-            <div className="grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-10 gap-y-6 rounded-xl border border-border bg-surface/40 p-5">
+            {/* No box. A border around two adjacent things is the least useful thing
+                a border can do, and every other section on this page separates with
+                a rule. The divider between the halves does the same job with a
+                hairline, which is what actually carries the pairing. */}
+            <div className="grid md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-x-12 gap-y-7 md:items-stretch">
               <div>
                 <div className="text-[10px] tracking-widest text-muted mb-3">RISK PRIORITY</div>
-                <div className="flex flex-wrap gap-x-8 gap-y-3">
+                <div className="flex flex-wrap gap-x-9 gap-y-3">
                   <Figure label="Urgent" value={risk.Urgent ?? 0} tone="danger" />
                   <Figure label="High" value={risk.High ?? 0} tone="warn" />
                   <Figure label="Moderate" value={risk.Moderate ?? 0} tone="accent" />
                   <Figure label="Low" value={risk.Low ?? 0} />
                 </div>
               </div>
-              <div className="md:border-l md:border-border md:pl-10">
+              <div className="md:border-l md:border-border/70 md:pl-12">
                 <div className="text-[10px] tracking-widest text-muted mb-3">SEVERITY</div>
                 <SeverityBar rows={data.by_severity} />
               </div>
@@ -124,7 +128,7 @@ export default function Dashboard() {
           </div>
         </Section>
         <div
-          className="hidden lg:block w-52 shrink-0 -mt-5"
+          className="hidden lg:block w-52 shrink-0 mt-2"
           style={{
             filter:
               "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
