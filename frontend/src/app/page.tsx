@@ -61,7 +61,7 @@ export default function Dashboard() {
 
   if (loading || !data) {
     return (
-      <div className="animate-in grid gap-8">
+      <div className="animate-in grid lg:grid-cols-[minmax(0,1fr)_13rem] gap-x-10 items-start">
         <Skeleton rows={6} />
       </div>
     );
@@ -73,112 +73,122 @@ export default function Dashboard() {
   const unmapped = data.owasp_coverage.find((r) => r.label === "Unmapped (assign manually)");
 
   return (
-    <div className="animate-in grid gap-8">
-      {data.qa_flags > 0 && (
-        <p className="measure border-l-2 border-warn/70 pl-3 py-1 text-sm text-warn">
-          {data.qa_flags} finding{data.qa_flags === 1 ? "" : "s"} carry verification flags &mdash;
-          unverified evidence, severity disagreement, or prompt injection. Review before reporting.
-        </p>
-      )}
+    <div className="animate-in grid lg:grid-cols-[minmax(0,1fr)_13rem] gap-x-10 items-start">
+      {/* THE ORB RAIL. Its own column rather than a slot inside one section, so it
+          is present the whole way down the page and does not take horizontal room
+          from the figures. Sticky, because a decoration that scrolls away has
+          nothing to say about the section you have scrolled to.
 
-      {/* Severity: one bar, no box. A single line of information does not need a
-          bordered container around it. The orb beside it is decorative and says so
-          in the markup: an ornament that looks like an instrument is worse than no
-          ornament, so it is aria-hidden and cannot be clicked. */}
-      <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-6 items-start">
-        <Section title="Severity">
-          <SeverityBar rows={data.by_severity} />
-        </Section>
-        {/* Decorative only: no labels, and the particle count scales itself down
-            to this box so it stays a sphere rather than a solid disc. */}
-        <div
-           className="hidden lg:block w-52 shrink-0 -mt-5 opacity-100"
-           style={{
-             filter:
-               "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
-          }}
+          Untouched otherwise: same component, same props, no styling changes. */}
+      <div className="grid gap-9 min-w-0">
+        {/* 1. WHERE TO START.
+
+            Risk priority leads, with severity beside it. Severity answers "how bad";
+            risk priority answers "what next", because it blends CVSS with exploit
+            probability, KEV and environment. Pairing them is the point: the two
+            differing is the interesting fact, and two sections apart nobody notices
+            that five Criticals produced no Urgents. */}
+        <Section
+          title="Where to start"
+          note="Risk blends CVSS with exploit probability and environment. Severity is the raw rating."
         >
-          <ReactiveOrb showLabels={false} />
-      </div>
-      </div>
+          <div className="grid gap-5">
+            <div className="grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-10 gap-y-6 rounded-xl border border-border bg-surface/40 p-5">
+              <div>
+                <div className="text-[10px] tracking-widest text-muted mb-3">RISK PRIORITY</div>
+                <div className="flex flex-wrap gap-x-8 gap-y-3">
+                  <Figure label="Urgent" value={risk.Urgent ?? 0} tone="danger" />
+                  <Figure label="High" value={risk.High ?? 0} tone="warn" />
+                  <Figure label="Moderate" value={risk.Moderate ?? 0} tone="accent" />
+                  <Figure label="Low" value={risk.Low ?? 0} />
+                </div>
+              </div>
+              <div className="md:border-l md:border-border md:pl-10">
+                <div className="text-[10px] tracking-widest text-muted mb-3">SEVERITY</div>
+                <SeverityBar rows={data.by_severity} />
+              </div>
+            </div>
 
-      {/* Risk sits beside severity because the interesting fact is the DIFFERENCE
-          between them: priority blends CVSS with exploit probability and KEV, so a
-          Critical that nobody is exploiting outranks nothing. */}
-      <Section
-        title="Risk priority"
-        note="CVSS blended with EPSS exploit probability, CISA KEV, and environment. Deliberately distinct from raw severity."
-      >
-        <div className="flex flex-wrap gap-x-8 gap-y-2">
-          <Figure label="Urgent" value={risk.Urgent ?? 0} tone="danger" />
-          <Figure label="High" value={risk.High ?? 0} tone="warn" />
-          <Figure label="Moderate" value={risk.Moderate ?? 0} tone="accent" />
-          <Figure label="Low" value={risk.Low ?? 0} />
-        </div>
-      </Section>
-
-      <Section title="Breakdown">
-        <div className="flex flex-wrap gap-x-14 gap-y-8">
-          <Table col="Status" rows={data.by_status} />
-          <Table col="Severity" rows={data.by_severity} colorSeverity />
-          <Table col="Category" rows={data.by_category} />
-        </div>
-      </Section>
-
-      <Section
-        title="OWASP Top 10:2025 coverage"
-        note="Indicative mapping. Findings with no reliable signal stay unmapped rather than being guessed."
-      >
-        {/* A row rather than halves: at 50/50 the note starts at mid-page and
-            drifts away from the bars it refers to as the window widens. */}
-        <div className="flex flex-wrap gap-x-14 gap-y-4 items-start">
-          <div className="min-w-[24rem] max-w-2xl flex-1">
-            <BarList rows={mapped} />
+            {/* Directly under the lead, not three sections down: flagged findings are
+                what should stop a report going out. */}
+            {data.qa_flags > 0 && (
+              <p className="measure border-l-2 border-warn/70 pl-3 py-1 text-sm text-warn">
+                {data.qa_flags} finding{data.qa_flags === 1 ? "" : "s"} carry verification flags
+                &mdash; unverified evidence, severity disagreement, or prompt injection. Review
+                before reporting.
+              </p>
+            )}
           </div>
-          {unmapped && (
-            <p className="measure text-xs text-muted self-start">
-              <span className="text-text">{unmapped.count}</span> finding
-              {unmapped.count === 1 ? "" : "s"} could not be mapped from the available signal and are
-              left for manual assignment. That is deliberate: a guessed framework category is worse
-              than an absent one, because it looks authoritative in a report.
-            </p>
-          )}
-        </div>
-      </Section>
+        </Section>
 
-      <Section
-        title="ATT&amp;CK coverage"
-        note="Where this project's findings sit in an attack, by tactic."
-      >
-        <AttackStrip projectId={projectId} />
-      </Section>
+        {/* 2. THE SAME SET, THREE WAYS. */}
+        <Section title="Breakdown">
+          <div className="flex flex-wrap gap-x-14 gap-y-8">
+            <Table col="Status" rows={data.by_status} />
+            <Table col="Severity" rows={data.by_severity} colorSeverity />
+            <Table col="Category" rows={data.by_category} />
+          </div>
+        </Section>
 
-      <Section title="LLM usage">
-        <div className="flex items-center gap-1 mb-4">
-          {([["1h", "1H"], ["24h", "24H"], ["7d", "7D"], ["30d", "30D"], ["all", "ALL"]] as const).map(
-            ([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setUsageWindow(key)}
-                aria-pressed={usageWindow === key}
-                className={`rounded border px-2 py-0.5 text-[10px] tracking-widest transition-colors ${
-                  usageWindow === key
-                    ? "border-accent/70 text-accent"
-                    : "border-border text-muted hover:border-accent/50 hover:text-text"
-                }`}
-              >
-                {label}
-              </button>
-            )
-          )}
-        </div>
+        {/* 3. FRAMEWORK COVERAGE. OWASP and ATT&CK answer the same kind of question,
+            so they belong in one glance rather than as two unrelated sections. */}
+        <Section
+          title="Framework coverage"
+          note="Indicative mapping. Findings with no reliable signal stay unmapped rather than guessed."
+        >
+          <div className="grid xl:grid-cols-2 gap-x-14 gap-y-8 items-start">
+            <div className="min-w-0">
+              <div className="text-[10px] tracking-widest text-muted mb-3">OWASP TOP 10:2025</div>
+              <BarList rows={mapped} />
+              {unmapped && (
+                <p className="measure text-xs text-muted mt-3">
+                  <span className="text-text">{unmapped.count}</span> finding
+                  {unmapped.count === 1 ? "" : "s"} could not be mapped from the available signal
+                  and are left for manual assignment. A guessed framework category is worse than an
+                  absent one, because it looks authoritative in a report.
+                </p>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] tracking-widest text-muted mb-3">
+                MITRE ATT&amp;CK &mdash; BY TACTIC
+              </div>
+              <AttackStrip projectId={projectId} />
+            </div>
+          </div>
+        </Section>
 
-        <div className="flex flex-wrap gap-x-8 gap-y-2 mb-5">
-          <Figure label="Calls" value={u.calls} />
-          <Figure label="Total tokens" value={u.total_tokens} />
-          <Figure label="Prompt" value={u.prompt_tokens} />
-          <Figure label="Completion" value={u.completion_tokens} />
-        </div>
+        {/* 4. OPERATIONAL, NOT POSTURE. Cost belongs last: mixing it into the same
+            flow implies it is comparable to the risk figures above. */}
+        <Section
+          title="LLM usage"
+          actions={
+            <div className="flex items-center gap-1">
+              {([["1h", "1H"], ["24h", "24H"], ["7d", "7D"], ["30d", "30D"], ["all", "ALL"]] as const).map(
+                ([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setUsageWindow(key)}
+                    aria-pressed={usageWindow === key}
+                    className={`rounded border px-2 py-0.5 text-[10px] tracking-widest transition-colors ${
+                      usageWindow === key
+                        ? "border-accent/70 text-accent"
+                        : "border-border text-muted hover:border-accent/50 hover:text-text"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              )}
+            </div>
+          }
+        >
+          <div className="flex flex-wrap gap-x-8 gap-y-2 mb-5">
+            <Figure label="Calls" value={u.calls} />
+            <Figure label="Total tokens" value={u.total_tokens} />
+            <Figure label="Prompt" value={u.prompt_tokens} />
+            <Figure label="Completion" value={u.completion_tokens} />
+          </div>
 
         {u.by_model?.length > 0 && (
           <table className="w-full text-sm max-w-xl">
@@ -200,7 +210,28 @@ export default function Dashboard() {
             </tbody>
           </table>
         )}
-      </Section>
+        </Section>
+      </div>
+
+      {/* The orb rail.
+
+          Its own column rather than a slot inside one section: it is present the
+          whole way down the page and takes no horizontal room from the figures.
+          Sticky, because a decoration that scrolls away has nothing to say about
+          the section you have scrolled to.
+
+          The component is untouched -- same props, same styling as before. */}
+      <div className="hidden lg:block sticky top-6 justify-self-center">
+        <div
+          className="w-52"
+          style={{
+            filter:
+              "brightness(1.4) saturate(1.15) drop-shadow(0 0 14px rgba(126, 231, 135, 0.28))",
+          }}
+        >
+          <ReactiveOrb showLabels={false} />
+        </div>
+      </div>
     </div>
   );
 }
