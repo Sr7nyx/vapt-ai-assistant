@@ -28,11 +28,57 @@ import {
  * when they pass behind the cloud.
  */
 
+/**
+ * The belts carry the product's argument, not decoration.
+ *
+ *   OUTER  what is being analysed  -- vulnerability classes
+ *   INNER  the analyser working on it -- EVIDENCE, VERIFY, CHALLENGE, VERDICT
+ *
+ * That split is the whole point. Rings of vulnerability names alone are a word
+ * cloud; an inner belt turning inside them says the thing the tool actually does,
+ * and it is the same four stages the pipeline runs.
+ *
+ * The inner belt turns the opposite way and faster, so the two read as separate
+ * systems rather than one thick band.
+ */
 const RINGS = [
-  { tilt: 74, roll: -18, radius: 1.42, speed: 0.16, words: ["CSRF", "RCE", "SSTI", "SQLi", "XSS"] },
-  { tilt: 82, roll: 22, radius: 1.72, speed: -0.11, words: ["JWT", "IDOR", "SSRF", "CORS", "XXE"] },
-  { tilt: 68, roll: 54, radius: 2.02, speed: 0.075, words: ["BOLA", "OPEN REDIRECT", "PATH TRAVERSAL"] },
+  {
+    kind: "process" as const,
+    // 52 rather than 70: at a flatter tilt this belt only spans +/-0.49 in depth,
+    // so its labels never pass properly behind the sphere and the fade-behind
+    // effect has nothing to act on. Measured, not guessed.
+    tilt: 52,
+    roll: 8,
+    radius: 1.34,
+    speed: -0.19,
+    words: ["EVIDENCE", "VERIFY", "CHALLENGE", "VERDICT"],
+  },
+  {
+    kind: "vuln" as const,
+    tilt: 80,
+    roll: -22,
+    radius: 1.86,
+    speed: 0.12,
+    words: ["XSS", "SQLi", "IDOR", "SSRF", "XXE", "JWT"],
+  },
+  {
+    kind: "vuln" as const,
+    tilt: 66,
+    roll: 48,
+    radius: 2.24,
+    speed: 0.068,
+    words: ["CORS", "CSRF", "RCE", "SSTI", "OPEN REDIRECT", "PATH TRAVERSAL"],
+  },
 ];
+
+/** Which belt a capability card highlights when hovered. */
+export type OrbFocus = "verify" | "challenge" | "report" | null;
+
+const FOCUS_WORD: Record<string, string> = {
+  verify: "VERIFY",
+  challenge: "CHALLENGE",
+  report: "VERDICT",
+};
 
 const PALETTE = {
   lime: [0.72, 1.0, 0.27] as Vec3,      // #B8FF45
@@ -40,7 +86,7 @@ const PALETTE = {
   emerald: [0.11, 0.43, 0.26] as Vec3,  // #1D6E43
 };
 
-type Label = { key: string; ring: number; t: number; text: string };
+type Label = { key: string; ring: number; t: number; text: string; kind: "vuln" | "process" };
 
 function compile(gl: WebGLRenderingContext, type: number, src: string) {
   const sh = gl.createShader(type);
@@ -78,8 +124,12 @@ function link(gl: WebGLRenderingContext, vs: string, fs: string) {
 export default function ReactiveOrb({
   className = "",
   showLabels = true,
+  focus = null,
 }: {
   className?: string;
+  /** Highlights one stage of the inner belt. Driven by the capability cards
+   *  below the hero, so hovering VERIFY lights the verification stage. */
+  focus?: OrbFocus;
   /** Off for small decorative instances, where the belts are legible but the
    *  words would not be. */
   showLabels?: boolean;
@@ -89,11 +139,17 @@ export default function ReactiveOrb({
   const labelRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
   const [failed, setFailed] = useState(false);
 
+  // Read through a ref: the draw loop must see the current value without the
+  // effect tearing down and rebuilding the WebGL context every time a card is
+  // hovered.
+  const focusRef = useRef<OrbFocus>(focus);
+  focusRef.current = focus;
+
   const labels = useMemo<Label[]>(() => {
     const out: Label[] = [];
     RINGS.forEach((r, ri) =>
       r.words.forEach((w, wi) =>
-        out.push({ key: `${ri}-${w}`, ring: ri, t: wi / r.words.length, text: w })
+        out.push({ key: `${ri}-${w}`, ring: ri, t: wi / r.words.length, text: w, kind: r.kind })
       )
     );
     return out;
@@ -269,7 +325,9 @@ export default function ReactiveOrb({
       st.mx += (st.tmx - st.mx) * ease;
       st.my += (st.tmy - st.my) * ease;
       st.hover += (st.tHover - st.hover) * ease;
-      st.shock *= Math.exp(-2.4 * dt);
+      // Slower than a bounce: ~1.2s to settle, which is long enough to read as a
+      // pass through the data rather than a click acknowledgement.
+      st.shock *= Math.exp(-2.0 * dt);
 
       // Idle spin plus a gentle lean toward the pointer -- a lean, never a follow.
       st.spin = reduced ? 0.4 : time * 0.11;
@@ -343,9 +401,9 @@ export default function ReactiveOrb({
         if (!el) continue;
         const ring = RINGS[L.ring];
         const b = bases[L.ring];
-        const spin = time * ring.speed * calm + st.shock * 0.5;
+        const spin = time * ring.speed * calm + st.shock * 0.9 * Math.sign(ring.speed);
         const ang = L.t * Math.PI * 2 + spin;
-        const rr = ring.radius * (1 + st.shock * 0.03);
+        const rr = ring.radius * (1 + st.shock * 0.05);
         const { radial, tangent } = ringFrame(b.a, b.b, ang);
         const local: Vec3 = [radial[0] * rr, radial[1] * rr, radial[2] * rr];
 
@@ -354,7 +412,22 @@ export default function ReactiveOrb({
         const p = apply(rot, local);
         const vis = occlusion(p);
         const front = (p[2] + rr) / (2 * rr);
-        const alpha = vis * (0.18 + front * 0.82);
+        let alpha = vis * (0.18 + front * 0.82);
+
+        // Fade before the edge rather than at it. A label clipped by the viewport
+        // reads as a bug; one that has already faded reads as depth.
+        const half = Math.min(W, H) / 2;
+        const outward = Math.hypot(m.x, m.y) / Math.max(half, 1);
+        if (outward > 0.78) alpha *= Math.max(0, 1 - (outward - 0.78) / 0.22);
+
+        const hovered = st.hover;
+        const isFocus = focusRef.current && L.text === FOCUS_WORD[focusRef.current];
+        if (isFocus) alpha = Math.min(1, alpha * 1.6 + 0.25);
+        else if (focusRef.current && L.kind === "process") alpha *= 0.35;
+        alpha *= 1 + hovered * 0.25;
+        // A click pulses every label, so the shockwave is felt on the belts and
+        // not only in the particle cloud.
+        alpha = Math.min(1, alpha * (1 + st.shock * 0.7));
 
         // matrix() maps the label's own box through the plane, so perspective
         // squashes the far side exactly as it squashes the ring itself.
@@ -362,7 +435,17 @@ export default function ReactiveOrb({
           `translate(${m.x}px, ${m.y}px) matrix(${m.a.toFixed(4)}, ${m.b.toFixed(4)}, ` +
           `${m.c.toFixed(4)}, ${m.d.toFixed(4)}, 0, 0) translate(-50%, -50%)`;
         el.style.opacity = alpha.toFixed(3);
-        el.style.color = front > 0.72 ? "#B8FF45" : front > 0.4 ? "#75F28A" : "#688574";
+
+        // The two belts are coloured apart so the concept is legible without a
+        // legend: the process ring is the lavender the app already uses for
+        // "the reviewer is involved", the vulnerability rings are phosphor.
+        if (isFocus) {
+          el.style.color = "#B8FF45";
+        } else if (L.kind === "process") {
+          el.style.color = front > 0.6 ? "#D2C3F6" : "#8d7fb0";
+        } else {
+          el.style.color = front > 0.72 ? "#B8FF45" : front > 0.4 ? "#75F28A" : "#688574";
+        }
         el.style.zIndex = p[2] > 0 ? "2" : "0";
       }
     };
@@ -432,7 +515,11 @@ export default function ReactiveOrb({
               if (el) labelRefs.current.set(L.key, el);
               else labelRefs.current.delete(L.key);
             }}
-            className="pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap font-mono text-[10px] tracking-[0.18em] will-change-transform"
+            className={`pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap font-mono will-change-transform ${
+              L.kind === "process"
+                ? "text-[9px] tracking-[0.3em]"
+                : "text-[11px] tracking-[0.16em]"
+            }`}
             style={{ opacity: 0 }}
           >
             {L.text}

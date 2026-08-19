@@ -1,54 +1,63 @@
 "use client";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
-import ReactiveOrb from "./ReactiveOrb";
+import ReactiveOrb, { OrbFocus } from "./ReactiveOrb";
 import { GithubButton, SourceFooter } from "./SourceLinks";
 
 /**
  * Sign-in.
  *
- * Structured around what the page is FOR. Its job is to get someone signed in;
- * the argument is what persuades them it is worth doing. The previous version had
- * that backwards -- the sign-in button sat in a side column beneath the orb and
- * five claims, competing with them for attention.
- *
- * So: one hero band carrying the claim, the visual and the action together, and a
- * capability strip beneath it. Detail is not hidden behind markers either. On a
- * settings page a marker is right, because the reader is mid-task and the
- * explanation is an interruption. Here the explanation IS the content, and a page
- * that makes a visitor click to find out what it does has answered nothing in the
- * fifteen seconds it had.
+ * The orb is the argument, not the ornament: the outer belts carry the
+ * vulnerability classes being analysed, the inner belt carries the four stages
+ * that analyse them. Hovering a capability below lights the matching stage, so
+ * the copy and the visual are the same statement rather than two decorations.
  */
 
-/** Three columns, because three is what gets read. Each is one line. */
-const CAPABILITIES: { label: string; title: string; body: string }[] = [
+const PIPELINE = ["INGEST", "PARSE", "VERIFY", "CHALLENGE", "VERDICT", "REPORT"];
+
+/** Which pipeline steps a hovered capability covers. REPORT covers two, because
+ *  the verdict is what the report is built from. */
+const FOCUS_STEPS: Record<string, string[]> = {
+  verify: ["PARSE", "VERIFY"],
+  challenge: ["CHALLENGE"],
+  report: ["VERDICT", "REPORT"],
+};
+
+/** Short enough to read in the time a visitor actually gives a landing page. */
+const CAPABILITIES: { key: Exclude<OrbFocus, null>; label: string; title: string; body: string }[] = [
   {
+    key: "verify",
     label: "VERIFY",
-    title: "Twelve deterministic checks",
+    title: "Claims are checked in code",
     body:
-      "Evidence is parsed into individual HTTP exchanges and each finding is bound to the one it is about. Headers, cookies, CORS, reflection, redirects, tokens, session handling and rate limits are settled by reading that exchange, not by asking a model twice.",
+      "Evidence is parsed into HTTP exchanges and each finding is bound to the one it concerns. Twelve deterministic checks settle it from that exchange.",
   },
   {
+    key: "challenge",
     label: "CHALLENGE",
-    title: "A second model argues the other side",
+    title: "A second model argues back",
     body:
-      "A separate reviewer makes the false-positive case for every finding. Its signals are combined by a fixed rule, so confidence is earned by agreement and ambiguous findings are held rather than forced.",
+      "A reviewer makes the false-positive case for every finding. A fixed rule combines the signals, so ambiguous findings are held rather than forced.",
   },
   {
+    key: "report",
     label: "REPORT",
     title: "Nothing ships unexamined",
     body:
-      "Exports run a pre-flight naming what is about to reach a client and should not: contradicted claims, unadjudicated findings, missing scores. Every change to a finding is recorded with its actor.",
+      "Exports run a pre-flight naming what should not reach a client: contradicted claims, unadjudicated findings, missing scores.",
   },
 ];
 
 export default function SignInGate() {
+  const [focus, setFocus] = useState<OrbFocus>(null);
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       <ShaderField />
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(1500px 900px at 62% 22%, transparent, rgba(10,14,12,0.94))" }}
+        style={{ background: "radial-gradient(1500px 900px at 60% 20%, transparent, rgba(10,14,12,0.94))" }}
       />
 
       <div className="relative z-10 min-h-screen flex flex-col px-6 lg:px-10">
@@ -59,20 +68,18 @@ export default function SignInGate() {
           <SourceFooter />
         </header>
 
-        {/* Hero: the claim, the visual and the action in one band, so nothing the
-            visitor needs is below the fold or off to one side. */}
-        <div className="flex-1 flex items-center py-10">
-          <div className="w-full max-w-6xl mx-auto grid lg:grid-cols-[minmax(0,1fr)_auto] gap-x-16 gap-y-10 items-center">
-            <div>
+        <div className="flex-1 flex items-center py-8">
+          <div className="w-full max-w-6xl mx-auto grid lg:grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-10 items-center">
+            <div className="min-w-0">
               <p
-                className="float-in text-[10px] tracking-[0.3em] text-muted mb-5"
+                className="float-in text-[10px] tracking-[0.3em] text-muted mb-4"
                 style={{ animationDelay: "20ms" }}
               >
                 AI-ASSISTED PENETRATION TESTING
               </p>
 
               <h1
-                className="float-in text-4xl sm:text-5xl leading-[1.08] mb-6 measure"
+                className="float-in text-4xl sm:text-5xl leading-[1.08] mb-5 measure"
                 style={{ animationDelay: "70ms" }}
               >
                 The model is assumed{" "}
@@ -80,17 +87,40 @@ export default function SignInGate() {
               </h1>
 
               <p
-                className="float-in text-muted leading-relaxed mb-9 measure"
-                style={{ animationDelay: "130ms" }}
+                className="float-in text-muted leading-relaxed mb-5 measure"
+                style={{ animationDelay: "120ms" }}
               >
                 An engagement workspace that takes raw evidence and scanner output through triage to
                 a client-ready report. The models draft; deterministic checks decide.
               </p>
 
-              {/* The action, at the point the reader has been persuaded. */}
+              {/* The pipeline in one line, directly under the claim: it says what the
+                  product does faster than a paragraph can. */}
+              <div
+                className="float-in flex flex-wrap items-center gap-x-2 gap-y-2 mb-8"
+                style={{ animationDelay: "160ms" }}
+              >
+                {PIPELINE.map((step, i) => (
+                  <span key={step} className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] tracking-[0.2em] transition-colors ${
+                        focus && FOCUS_STEPS[focus]?.includes(step)
+                          ? "text-highlight"
+                          : focus
+                          ? "text-muted/40"
+                          : "text-muted"
+                      }`}
+                    >
+                      {step}
+                    </span>
+                    {i < PIPELINE.length - 1 && <span className="text-border">&rarr;</span>}
+                  </span>
+                ))}
+              </div>
+
               <div
                 className="float-in flex flex-col sm:flex-row gap-2.5 max-w-lg"
-                style={{ animationDelay: "190ms" }}
+                style={{ animationDelay: "200ms" }}
               >
                 <button
                   className="btn btn-icon flex-1 flex items-center justify-center gap-2.5 py-3"
@@ -104,45 +134,60 @@ export default function SignInGate() {
                   </svg>
                   Sign in with Google
                 </button>
-                <div className="sm:w-52">
-                  <GithubButton full label="VIEW SOURCE" />
+                <div className="sm:w-56">
+                  <GithubButton full label="VIEW EVALUATION" />
                 </div>
               </div>
 
               <p
-                className="float-in text-xs text-muted mt-4 measure"
-                style={{ animationDelay: "240ms" }}
+                className="float-in flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] tracking-[0.18em] text-muted mt-5"
+                style={{ animationDelay: "250ms" }}
               >
-                Projects and findings are private to your account. MIT licensed and readable without
-                one. Authorized testing only &mdash; this deployment is a demonstration, so use
-                synthetic data.
+                <span className="text-accent">&#9679;</span>
+                <span>DEMO ENVIRONMENT</span>
+                <span className="text-border">&middot;</span>
+                <span>SYNTHETIC DATA ONLY</span>
+                <span className="text-border">&middot;</span>
+                <span>MIT LICENSED</span>
               </p>
             </div>
 
-            <div className="float-in w-full lg:w-[400px]" style={{ animationDelay: "110ms" }}>
-              <ReactiveOrb />
-              <p className="text-center text-[10px] tracking-[0.25em] text-muted/60 mt-3 transition-colors hover:text-accent">
-                CLICK TO DISRUPT
+            <div className="float-in w-full lg:w-[420px]" style={{ animationDelay: "110ms" }}>
+              <ReactiveOrb focus={focus} />
+              <p className="text-center text-[10px] tracking-[0.25em] text-muted/60 mt-2">
+                CLICK TO PROBE
               </p>
             </div>
           </div>
         </div>
 
-        {/* Capability strip: three columns, visible prose, no markers. This is the
-            substance, so it is on the page rather than one click away. */}
-        <div className="shrink-0 border-t border-border/50 py-8">
-          <div className="w-full max-w-6xl mx-auto grid md:grid-cols-3 gap-x-12 gap-y-8">
+        {/* Hovering a capability lights the matching stage on the inner belt, so
+            the words below and the visual above are one statement. */}
+        <div className="shrink-0 border-t border-border/50 py-7">
+          <div className="w-full max-w-6xl mx-auto grid md:grid-cols-3 gap-x-12 gap-y-7">
             {CAPABILITIES.map((c, i) => (
               <div
-                key={c.label}
-                className="float-in"
-                style={{ animationDelay: `${300 + i * 80}ms` }}
+                key={c.key}
+                className="float-in cursor-default"
+                style={{ animationDelay: `${300 + i * 70}ms` }}
+                onMouseEnter={() => setFocus(c.key)}
+                onMouseLeave={() => setFocus(null)}
               >
-                <div className="flex items-center gap-2.5 mb-2.5">
-                  <span className="text-[10px] tracking-[0.25em] text-accent">{c.label}</span>
-                  <span className="h-px flex-1 bg-border" />
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span
+                    className={`text-[10px] tracking-[0.25em] transition-colors ${
+                      focus === c.key ? "text-highlight" : "text-accent"
+                    }`}
+                  >
+                    {c.label}
+                  </span>
+                  <span
+                    className={`h-px flex-1 transition-colors ${
+                      focus === c.key ? "bg-highlight/60" : "bg-border"
+                    }`}
+                  />
                 </div>
-                <p className="text-sm mb-1.5">{c.title}</p>
+                <p className="text-sm mb-1">{c.title}</p>
                 <p className="text-xs text-muted leading-relaxed">{c.body}</p>
               </div>
             ))}
