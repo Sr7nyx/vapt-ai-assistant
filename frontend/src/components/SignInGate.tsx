@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { motionReduced } from "@/lib/motion";
 import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
 import ReactiveOrb, { OrbFocus } from "./ReactiveOrb";
@@ -48,6 +49,45 @@ const CAPABILITIES: { key: Exclude<OrbFocus, null>; label: string; title: string
       "Exports run a pre-flight naming what should not reach a client: contradicted claims, unadjudicated findings, missing scores.",
   },
 ];
+
+/** Reports the assembly, then becomes the instruction. Timed to match the orb's
+ *  own boot rather than driven by it: a prop threaded through for a caption would
+ *  re-render the orb's parent on every frame. */
+function BootCaption() {
+  const STAGES = ["PARTICLES", "SPHERE", "RINGS", "LABELS", "READY"];
+  const [stage, setStage] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (motionReduced()) {
+      setDone(true);
+      return;
+    }
+    const marks = [0, 780, 1300, 1870, 2450];
+    const timers = marks.map((ms, i) => window.setTimeout(() => setStage(i), ms));
+    const finish = window.setTimeout(() => setDone(true), 3300);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(finish);
+    };
+  }, []);
+
+  return (
+    <p className="text-center text-[10px] tracking-[0.25em] mt-2 h-4">
+      {done ? (
+        <span className="text-muted/60">CLICK TO PROBE</span>
+      ) : (
+        <span className="text-accent/70">
+          {STAGES[stage]}
+          <span className="text-muted/40">
+            {" "}
+            {"·".repeat(stage + 1)}
+          </span>
+        </span>
+      )}
+    </p>
+  );
+}
 
 export default function SignInGate() {
   const [focus, setFocus] = useState<OrbFocus>(null);
@@ -154,9 +194,9 @@ export default function SignInGate() {
 
             <div className="float-in w-full lg:w-[420px]" style={{ animationDelay: "110ms" }}>
               <ReactiveOrb focus={focus} />
-              <p className="text-center text-[10px] tracking-[0.25em] text-muted/60 mt-2">
-                CLICK TO PROBE
-              </p>
+              {/* The caption doubles as the boot readout: the orb reports what it is
+                  assembling, then settles into the instruction. */}
+              <BootCaption />
             </div>
           </div>
         </div>

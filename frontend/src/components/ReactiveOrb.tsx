@@ -5,7 +5,7 @@ import {
   SPHERE_VERT, SPHERE_FRAG, RING_VERT, RING_FRAG,
 } from "./orb/shaders";
 import {
-  CAM_DIST, FOCAL, Mat3, Vec3, apply, fibonacciSphere, mul, occlusion, ringBasis, rotX, rotY,
+  CAM_DIST, FOCAL, Mat3, Vec3, apply, fibonacciSphere, mul, occlusion, project, ringBasis, rotX, rotY,
   planeMatrix, ringFrame,
 } from "./orb/geometry";
 
@@ -55,7 +55,9 @@ const RINGS = [
   },
   {
     kind: "vuln" as const,
-    tilt: 80,
+    // 68, not 80. At 80 this belt is nearly edge-on to the camera and spans only
+    // +/-0.32 in depth, so its labels never really travel behind the sphere.
+    tilt: 68,
     roll: -22,
     radius: 1.86,
     speed: 0.12,
@@ -70,6 +72,38 @@ const RINGS = [
     words: ["CORS", "CSRF", "RCE", "SSTI", "OPEN REDIRECT", "PATH TRAVERSAL"],
   },
 ];
+
+/**
+ * Fragments that surface on the sphere, as if a particle briefly resolved into the
+ * thing it represents.
+ *
+ * Rendered as HTML, not as particles: the cloud is gl.POINTS with no texture, so a
+ * glyph would need a font atlas and UV work for a handful of characters. Projecting
+ * a few absolutely positioned spans through the SAME matrix the labels use costs
+ * nothing extra and stays crisp at any DPI.
+ *
+ * Deliberately mundane -- status codes, methods, header names. An orb showing
+ * "CRITICAL" would be theatre; one showing 403 looks like something reading traffic.
+ */
+const GLYPHS = [
+  "200", "403", "401", "500", "302",
+  "GET", "POST", "PUT",
+  "CSP", "JWT", "CORS", "HSTS",
+  "?id=", "../", "'--", "<svg",
+];
+
+/** How many surface at once. Small on purpose: this is a texture, not a readout. */
+const GLYPH_COUNT = 7;
+
+/** Boot stages, in the order the system assembles. */
+const BOOT = [
+  { at: 0.0, label: "PARTICLES" },
+  { at: 0.3, label: "SPHERE" },
+  { at: 0.5, label: "RINGS" },
+  { at: 0.72, label: "LABELS" },
+  { at: 0.94, label: "READY" },
+];
+const BOOT_SECONDS = 2.6;
 
 /** Which belt a capability card highlights when hovered. */
 export type OrbFocus = "verify" | "challenge" | "report" | null;
@@ -137,6 +171,7 @@ export default function ReactiveOrb({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
+  const glyphRefs = useRef<Map<number, HTMLSpanElement>>(new Map());
   const [failed, setFailed] = useState(false);
 
   // Read through a ref: the draw loop must see the current value without the
@@ -218,7 +253,25 @@ export default function ReactiveOrb({
     gl.bindBuffer(gl.ARRAY_BUFFER, riBuf);
     gl.bufferData(gl.ARRAY_BUFFER, rIdx, gl.STATIC_DRAW);
 
-    const bases = RINGS.map((r) => ringBasis(r.tilt, r.roll));
+    // Bases are recomputed each frame rather than once, because the tilts drift.
+    // A ring system that loops identically forever reads as a screensaver; one
+    // that reconfigures reads as something adjusting to what it is looking at.
+    // The drift is small and slow -- a few degrees over tens of seconds.
+    // Drift is asymmetric on purpose. A symmetric swing takes the inner belt from
+    // 52 down to 45, where its depth span collapses to 0.39 and labels stop
+    // passing convincingly behind the sphere. Offsetting the sine so it only ever
+    // steepens keeps every belt above the depth its labels need, measured across
+    // the full cycle rather than assumed.
+    const driftedBases = (t: number) =>
+      RINGS.map((r, i) =>
+        ringBasis(
+          // Negative offset: drift only ever moves a belt away from edge-on,
+          // never toward it. Tilt approaching 90 flattens a ring into a line.
+          r.tilt - (Math.sin(t * 0.055 + i * 2.1) + 1) * 4,
+          r.roll + Math.sin(t * 0.037 + i * 1.3) * 9
+        )
+      );
+    let bases = driftedBases(0);
 
     // --- uniform lookups, once -----------------------------------------------
     const U = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
@@ -233,6 +286,7 @@ export default function ReactiveOrb({
       rot: U(ringProg, "u_rot"), time: U(ringProg, "u_time"), res: U(ringProg, "u_res"),
       cam: U(ringProg, "u_camDist"), foc: U(ringProg, "u_focal"), shock: U(ringProg, "u_shock"),
       dpr: U(ringProg, "u_dpr"), calm: U(ringProg, "u_calm"), hover: U(ringProg, "u_hover"),
+      boot: U(ringProg, "u_boot"),
       green: U(ringProg, "u_green"), lime: U(ringProg, "u_lime"),
       A: U(ringProg, "u_ringA"), B: U(ringProg, "u_ringB"),
       R: U(ringProg, "u_ringR"), S: U(ringProg, "u_ringSpeed"),
@@ -268,7 +322,24 @@ export default function ReactiveOrb({
       hover: 0, tHover: 0,
       shock: 0, dir: [0, 0, 1] as Vec3,
       spin: 0, visible: true, onScreen: true,
+      boot: 0,
     };
+
+    // Each glyph sits at a fixed point on the sphere and fades in and out on its
+    // own schedule, so they surface and vanish rather than blinking in unison.
+    const glyphs = Array.from({ length: GLYPH_COUNT }, (_, i) => {
+      const y = 1 - ((i + 0.5) / GLYPH_COUNT) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = Math.PI * (3 - Math.sqrt(5)) * i;
+      return {
+        dir: [Math.cos(th) * r, y, Math.sin(th) * r] as Vec3,
+        // Prime-ish periods so the set never falls into a visible rhythm.
+        period: 5.5 + (i % 4) * 1.7,
+        offset: i * 1.31,
+        text: GLYPHS[i % GLYPHS.length],
+        nextIndex: i,
+      };
+    });
 
     const onMove = (e: PointerEvent) => {
       const r = wrap.getBoundingClientRect();
@@ -328,6 +399,8 @@ export default function ReactiveOrb({
       // Slower than a bounce: ~1.2s to settle, which is long enough to read as a
       // pass through the data rather than a click acknowledgement.
       st.shock *= Math.exp(-2.0 * dt);
+      // Boot runs once, on a wall clock, so a slow first frame does not skip it.
+      st.boot = reduced ? 1 : Math.min(1, (now - t0) / 1000 / BOOT_SECONDS);
 
       // Idle spin plus a gentle lean toward the pointer -- a lean, never a follow.
       st.spin = reduced ? 0.4 : time * 0.11;
@@ -335,6 +408,13 @@ export default function ReactiveOrb({
         rotX(st.my * 0.28 + (reduced ? 0.1 : Math.sin(time * 0.13) * 0.12)),
         rotY(st.spin + st.mx * 0.35)
       );
+
+      bases = driftedBases(reduced ? 0 : time);
+      // The shader needs the same drifted basis the labels use, or the belts and
+      // their words come apart -- which is the one thing that would make the whole
+      // effect look broken rather than alive.
+      flatA.set(bases.flatMap((b) => b.a));
+      flatB.set(bases.flatMap((b) => b.b));
 
       const res = [canvas.width, canvas.height];
       const calm = reduced ? 0.25 : 1;
@@ -353,6 +433,8 @@ export default function ReactiveOrb({
       gl.uniform1f(ru.dpr, dpr);
       gl.uniform1f(ru.calm, calm);
       gl.uniform1f(ru.hover, st.hover);
+      // Rings arrive third, once the sphere has formed.
+      gl.uniform1f(ru.boot, Math.max(0, Math.min(1, (st.boot - 0.46) / 0.2)));
       gl.uniform3fv(ru.green, PALETTE.green);
       gl.uniform3fv(ru.lime, PALETTE.lime);
       gl.uniform3fv(ru.A, flatA);
@@ -380,7 +462,13 @@ export default function ReactiveOrb({
       gl.uniform1f(su.hover, st.hover);
       gl.uniform1f(su.dpr, dpr);
       // Point size follows the box too, or a small orb becomes a coarse stipple.
-      gl.uniform1f(su.size, Math.max(1.0, Math.min(2.1, box / 230)));
+      // Particles arrive first, growing into the sphere. Below 0.3 they are
+      // scattered points; the shader's own noise does the rest.
+      const bootParticles = Math.min(1, st.boot / 0.3);
+      gl.uniform1f(
+        su.size,
+        Math.max(1.0, Math.min(2.1, box / 230)) * (0.35 + bootParticles * 0.65)
+      );
       gl.uniform1f(su.calm, calm);
       gl.uniform3fv(su.lime, PALETTE.lime);
       gl.uniform3fv(su.green, PALETTE.green);
@@ -394,6 +482,44 @@ export default function ReactiveOrb({
       gl.enableVertexAttribArray(as);
       gl.vertexAttribPointer(as, 2, gl.FLOAT, false, 0, 0);
       gl.drawArrays(gl.POINTS, 0, COUNT);
+
+      // --- glyphs: fragments surfacing on the sphere -------------------------
+      // Projected through the same matrix as everything else, so they sit ON the
+      // surface rather than floating near it. Only the front-facing half is
+      // drawn; a status code showing through the back of a sphere is the kind of
+      // detail that makes the whole thing read as fake.
+      for (let i = 0; i < glyphs.length; i++) {
+        const el = glyphRefs.current.get(i);
+        const g = glyphs[i];
+        if (!el) continue;
+
+        const phase = ((time + g.offset) % g.period) / g.period;
+        // Visible for a fifth of its cycle, easing in and out.
+        let vis = phase < 0.2 ? Math.sin((phase / 0.2) * Math.PI) : 0;
+        if (vis <= 0.001) {
+          el.style.opacity = "0";
+          // Swap the text while invisible, so it never changes in view.
+          if (g.nextIndex >= 0) {
+            g.text = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+            el.textContent = g.text;
+            g.nextIndex = -1;
+          }
+          continue;
+        }
+        g.nextIndex = 0;
+
+        const world: Vec3 = [g.dir[0] * 1.02, g.dir[1] * 1.02, g.dir[2] * 1.02];
+        const q = apply(rot, world);
+        if (q[2] <= 0.05) {
+          el.style.opacity = "0";
+          continue;
+        }
+        const proj = project(q, W, H);
+        // Fades toward the limb as well as by phase, so nothing pops at the edge.
+        const facing = q[2];
+        el.style.transform = `translate(${proj.x}px, ${proj.y}px) translate(-50%, -50%)`;
+        el.style.opacity = (vis * Math.min(1, facing) * 0.85 * Math.min(1, st.boot / 0.3)).toFixed(3);
+      }
 
       // --- labels, from the same matrix -------------------------------------
       for (const L of labels) {
@@ -413,6 +539,9 @@ export default function ReactiveOrb({
         const vis = occlusion(p);
         const front = (p[2] + rr) / (2 * rr);
         let alpha = vis * (0.18 + front * 0.82);
+        // Labels are the last thing to arrive, so the sequence reads
+        // particles -> sphere -> rings -> labels rather than everything at once.
+        alpha *= Math.max(0, Math.min(1, (st.boot - 0.72) / 0.22));
 
         // Fade before the edge rather than at it. A label clipped by the viewport
         // reads as a bug; one that has already faded reads as depth.
@@ -504,6 +633,24 @@ export default function ReactiveOrb({
           ))}
         </div>
       )}
+
+      {/* Glyph slots. Fixed count, positioned every frame -- creating and
+          destroying nodes at 60fps would cost more than the effect is worth. */}
+      {!failed &&
+        Array.from({ length: GLYPH_COUNT }, (_, i) => (
+          <span
+            key={`g${i}`}
+            aria-hidden="true"
+            ref={(el) => {
+              if (el) glyphRefs.current.set(i, el);
+              else glyphRefs.current.delete(i);
+            }}
+            className="pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap font-mono text-[9px] tracking-[0.1em] text-accent/90 will-change-transform"
+            style={{ opacity: 0 }}
+          >
+            {GLYPHS[i % GLYPHS.length]}
+          </span>
+        ))}
 
       {!failed &&
         showLabels &&

@@ -177,6 +177,7 @@ uniform float u_ringR[3];
 uniform float u_ringSpeed[3];
 uniform float u_dpr;
 uniform float u_calm;
+uniform float u_boot;      // 0..1 while the system assembles
 
 ${PROJECT}
 
@@ -204,7 +205,10 @@ void main() {
   float head = fract(a_t - spin * 0.159);
   v_scan = pow(1.0 - min(head, 1.0 - head) * 2.0, 6.0);
 
-  gl_PointSize = max(1.0, (0.9 + v_depth * 1.3 + v_scan * 2.2) * u_dpr);
+  // The belts sweep outward into place rather than fading on the spot: a ring
+  // that grows to its radius reads as being constructed.
+  gl_Position.xy *= mix(0.55, 1.0, u_boot);
+  gl_PointSize = max(1.0, (0.9 + v_depth * 1.3 + v_scan * 2.2) * u_dpr * u_boot);
 }
 `;
 
