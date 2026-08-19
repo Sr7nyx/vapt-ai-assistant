@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { swr, readCache, invalidate } from "@/lib/cache";
 import { RetestCampaign, RetestCandidate } from "@/lib/types";
 import { useProject } from "@/lib/ProjectContext";
 import { useToast } from "@/components/Toast";
@@ -41,19 +42,36 @@ export default function RetestPage() {
   const [round, setRound] = useState<number | undefined>(undefined);
   const [target, setTarget] = useState<RetestCandidate | null>(null);
 
+  // Keyed by project AND round: switching rounds must not show the previous
+  // round's outcomes from cache while the right ones arrive.
+  const cacheKey = projectId ? `retest:${projectId}:${round ?? "latest"}` : "";
+
   const load = useCallback(() => {
     if (!token || !projectId) {
       setData(null);
       return;
     }
-    setLoading(true);
-    api
-      .retestCampaign(token, projectId, round)
-      .then(setData)
-      .catch((e) => notify((e as Error).message, "error"))
-      .finally(() => setLoading(false));
-  }, [token, projectId, round, notify]);
-  useEffect(() => load(), [load]);
+    // A recorded outcome changes the campaign AND the findings it derives from.
+    invalidate("retest:");
+    invalidate(`findings:${projectId}`);
+    return swr<RetestCampaign>(cacheKey, () => api.retestCampaign(token, projectId, round), (value) => {
+      setData(value);
+      setLoading(false);
+    });
+  }, [token, projectId, round, cacheKey]);
+
+  useEffect(() => {
+    if (!token || !projectId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(!readCache<RetestCampaign>(cacheKey));
+    return swr<RetestCampaign>(cacheKey, () => api.retestCampaign(token, projectId, round), (value) => {
+      setData(value);
+      setLoading(false);
+    });
+  }, [token, projectId, round, cacheKey]);
 
   if (!projectId) {
     return (

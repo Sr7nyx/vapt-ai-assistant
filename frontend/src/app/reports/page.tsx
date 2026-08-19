@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
+import { swr, readCache, invalidate } from "@/lib/cache";
 import { Finding } from "@/lib/types";
 import { useProject } from "@/lib/ProjectContext";
 import { useToast } from "@/components/Toast";
@@ -52,16 +53,28 @@ export default function ReportsPage() {
   const [pick, setPick] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
+  // The SAME key the findings page uses. This page fetches the identical list, so
+  // sharing the cache makes it instant once either page has been visited -- there
+  // is no reason for two pages to pay separately for one request.
+  const cacheKey = projectId ? `findings:${projectId}` : "";
+
   const load = useCallback(() => {
     if (!token || !projectId) return;
-    setLoading(true);
-    api
-      .listFindings(token, projectId)
-      .then(setFindings)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token, projectId]);
-  useEffect(() => load(), [load]);
+    invalidate(cacheKey);
+    return swr<Finding[]>(cacheKey, () => api.listFindings(token, projectId), (value) => {
+      setFindings(value);
+      setLoading(false);
+    });
+  }, [token, projectId, cacheKey]);
+
+  useEffect(() => {
+    if (!token || !projectId) return;
+    setLoading(!readCache<Finding[]>(cacheKey));
+    return swr<Finding[]>(cacheKey, () => api.listFindings(token, projectId), (value) => {
+      setFindings(value);
+      setLoading(false);
+    });
+  }, [token, projectId, cacheKey]);
 
   const severities = useMemo(
     () => Array.from(new Set(findings.map((f) => String(f.severity || "")).filter(Boolean))),

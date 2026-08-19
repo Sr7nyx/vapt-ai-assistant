@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
-import { invalidate } from "@/lib/cache";
+import { swr, readCache, invalidate } from "@/lib/cache";
 import { useProject } from "@/lib/ProjectContext";
 import { Project } from "@/lib/types";
 import { useToast } from "@/components/Toast";
@@ -15,16 +15,30 @@ export default function ProjectsPage() {
   const { projectId, setProjectId } = useProject();
   const { notify } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !readCache<Project[]>("projects"));
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", client: "", scope: "" });
 
+  // Cache-then-revalidate. Every page switch used to be a cold round trip to the
+  // API, which on a free-tier instance is two to four seconds of skeleton for data
+  // that has almost certainly not changed. The list now paints from cache
+  // immediately and refreshes behind it.
   const load = useCallback(() => {
     if (!token) return;
-    setLoading(true);
-    api.listProjects(token).then(setProjects).catch((e) => notify((e as Error).message, "error")).finally(() => setLoading(false));
-  }, [token, notify]);
-  useEffect(() => load(), [load]);
+    invalidate("projects");
+    return swr<Project[]>("projects", () => api.listProjects(token), (value) => {
+      setProjects(value);
+      setLoading(false);
+    });
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    return swr<Project[]>("projects", () => api.listProjects(token), (value) => {
+      setProjects(value);
+      setLoading(false);
+    });
+  }, [token]);
 
   const create = async () => {
     if (!form.name.trim()) return;

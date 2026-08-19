@@ -171,6 +171,10 @@ export default function ImportPage() {
     try {
       const r = await api.commitCandidates(token, projectId, batch);
       invalidate("overview");
+      // Findings, reports and retest all read a cached findings list keyed by
+      // project. Without this they would serve the list from before this commit.
+      invalidate("findings:");
+      invalidate("retest:");
       notify(`Committed ${r.committed}, skipped ${r.skipped} already present`, "success");
       sel.clear();
     } catch (e) {

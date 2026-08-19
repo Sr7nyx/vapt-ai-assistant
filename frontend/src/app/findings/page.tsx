@@ -2,7 +2,7 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api";
-import { invalidate } from "@/lib/cache";
+import { invalidate, swr, readCache } from "@/lib/cache";
 import { useProject } from "@/lib/ProjectContext";
 import { Finding, Project } from "@/lib/types";
 import { sevClass } from "@/components/Severity";
@@ -43,15 +43,35 @@ export default function FindingsPage() {
     if (token) api.listProjects(token).then(setProjects).catch(() => {});
   }, [token]);
 
+  // Keyed per project, so switching projects does not show another project's
+  // findings from cache while the right ones load.
+  const cacheKey = projectId ? `findings:${projectId}` : "";
+
+  // Called after a mutation: drop the cached copy, then refetch.
   const load = useCallback(() => {
     if (!token || !projectId) {
       setFindings([]);
       return;
     }
-    setLoading(true);
-    api.listFindings(token, projectId).then(setFindings).catch((e) => notify((e as Error).message, "error")).finally(() => setLoading(false));
-  }, [token, projectId, notify]);
-  useEffect(() => load(), [load]);
+    invalidate(cacheKey);
+    return swr<Finding[]>(cacheKey, () => api.listFindings(token, projectId), (value) => {
+      setFindings(value);
+      setLoading(false);
+    });
+  }, [token, projectId, cacheKey]);
+
+  useEffect(() => {
+    if (!token || !projectId) {
+      setFindings([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(!readCache<Finding[]>(cacheKey));
+    return swr<Finding[]>(cacheKey, () => api.listFindings(token, projectId), (value) => {
+      setFindings(value);
+      setLoading(false);
+    });
+  }, [token, projectId, cacheKey]);
 
   const toggle = (id: number) =>
     setExpanded((prev) => {
@@ -66,10 +86,12 @@ export default function FindingsPage() {
       if (f.id) {
         await api.updateFinding(token, f.id as number, f);
       invalidate("overview");
+      invalidate("retest:");
         notify("Finding updated", "success");
       } else if (projectId) {
         await api.createFinding(token, projectId, f);
       invalidate("overview");
+      invalidate("retest:");
         notify("Finding added", "success");
       }
       setEditing(null);
@@ -84,6 +106,7 @@ export default function FindingsPage() {
     try {
       await api.deleteFinding(token, id);
       invalidate("overview");
+      invalidate("retest:");
       notify("Finding deleted", "success");
       load();
     } catch (e) {
@@ -115,6 +138,7 @@ export default function FindingsPage() {
     try {
       const r = await api.bulkDeleteFindings(token, ids);
       invalidate("overview");
+      invalidate("retest:");
       notify(`Deleted ${r.deleted} finding(s)`, "success");
       sel.clear();
       load();
@@ -307,6 +331,7 @@ export default function FindingsPage() {
           onSubmit={async (payload) => {
             await api.retestFinding(token, retesting.id, payload);
       invalidate("overview");
+      invalidate("retest:");
             notify(`Retest recorded (${payload.retest_status})`, "success");
             setRetesting(null);
             load();

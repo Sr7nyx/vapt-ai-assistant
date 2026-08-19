@@ -185,6 +185,10 @@ export default function AnalyzerPage() {
         try {
           await api.createFinding(token, projectId, applyDefaults(f));
       invalidate("overview");
+      // Findings, reports and retest all read a cached findings list keyed by
+      // project. Without this they would serve the list from before this commit.
+      invalidate("findings:");
+      invalidate("retest:");
           n++;
         } catch (e) {
           // One bad finding should not strand the rest of the batch.
