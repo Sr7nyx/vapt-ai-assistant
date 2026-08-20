@@ -89,10 +89,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
     // A bare spinner is the worst thing to show after a redirect: the user has
     // just left the site and come back, and it gives no signal they arrived
     // anywhere in particular.
-    return <SessionHandoff email={session?.user?.email || undefined} />;
+    //
+    // No email here: while the status is "loading" next-auth types `session` as
+    // null, so TypeScript narrows it to `never` and reading `.user` is an error.
+    // It is also the honest state -- the account is not resolved yet, which is
+    // precisely what the first stage says.
+    return <SessionHandoff />;
   }
 
   if (handoff) {
+    // Reached only from "authenticated", so the session is present here.
     return <SessionHandoff email={session?.user?.email || undefined} />;
   }
   if (status !== "authenticated") {
