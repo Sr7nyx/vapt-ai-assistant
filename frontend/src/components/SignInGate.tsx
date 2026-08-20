@@ -115,7 +115,7 @@ export default function SignInGate() {
                 className="float-in text-[10px] tracking-[0.3em] text-muted mb-4"
                 style={{ animationDelay: "20ms" }}
               >
-                AI-ASSISTED PENETRATION TESTING
+                AI-ASSISTED VULNERABILITY ANALYSIS
               </p>
 
               <h1
