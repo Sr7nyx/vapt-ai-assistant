@@ -259,3 +259,93 @@ def review_savings(candidates):
         "skippable": len(skippable),
         "share": round(len(skippable) / len(candidates), 3) if candidates else 0.0,
     }
+
+
+# --- verifier gap detection ---------------------------------------------------
+#
+# Which finding classes reach the reviewer without a deterministic answer? That is
+# a ranked list of which verifier to write next, produced by the system rather than
+# guessed at.
+#
+# The distinction that makes the list useful: a class no verifier CLAIMS is a gap
+# worth filling; a class a verifier claims but cannot settle from the evidence is
+# usually not -- more often the evidence was thin, and writing another verifier
+# would not have helped.
+
+
+def verifier_gaps(findings, top=12):
+    """Finding classes with no deterministic coverage, most frequent first.
+
+    Three states per class:
+
+      covered      a verifier answered CONFIRMED or REFUTED
+      inconclusive a verifier claimed it but the evidence did not settle it
+      unclaimed    no verifier handles this class at all
+
+    Only `unclaimed` is a gap in the verifier layer. Reporting all three keeps that
+    honest -- a class that is merely under-evidenced would otherwise look like
+    missing code.
+    """
+    tally = defaultdict(lambda: {"covered": 0, "inconclusive": 0, "unclaimed": 0, "titles": set()})
+
+    for f in findings or []:
+        key = class_key(f)
+        if not key.strip("|"):
+            continue
+        entry = tally[key]
+        entry["titles"].add(str(f.get("title") or ""))
+
+        v = f.get("_verification")
+        if not v:
+            # verify_finding returns None when nothing handles the claim.
+            entry["unclaimed"] += 1
+        elif v.get("status") in ("CONFIRMED", "REFUTED"):
+            entry["covered"] += 1
+        else:
+            entry["inconclusive"] += 1
+
+    rows = []
+    for key, t in tally.items():
+        total = t["covered"] + t["inconclusive"] + t["unclaimed"]
+        if not total:
+            continue
+        rows.append({
+            "class": key,
+            "title": sorted(t["titles"])[0] if t["titles"] else "",
+            "total": total,
+            "covered": t["covered"],
+            "inconclusive": t["inconclusive"],
+            "unclaimed": t["unclaimed"],
+            "coverage": round(t["covered"] / total, 3),
+        })
+
+    # Ranked by how many findings a new verifier would actually reach, not by raw
+    # frequency: a common class that is already covered is not where to spend time.
+    gaps = [r for r in rows if r["unclaimed"] > 0]
+    gaps.sort(key=lambda r: (-r["unclaimed"], r["title"]))
+
+    covered_total = sum(r["covered"] for r in rows)
+    all_total = sum(r["total"] for r in rows)
+
+    return {
+        "gaps": gaps[:top],
+        "classes": len(rows),
+        "findings": all_total,
+        "coverage": round(covered_total / all_total, 3) if all_total else 0.0,
+        "recommendation": _gap_recommendation(gaps, all_total),
+    }
+
+
+def _gap_recommendation(gaps, total):
+    if not total:
+        return "No findings yet."
+    if not gaps:
+        return ("Every finding class here is claimed by a verifier. The next gain is in "
+                "evidence quality rather than new checks.")
+    top = gaps[0]
+    reach = sum(g["unclaimed"] for g in gaps[:3])
+    return (
+        f"A verifier for \"{top['title']}\" would reach {top['unclaimed']} finding"
+        f"{'' if top['unclaimed'] == 1 else 's'} here. The three largest gaps together "
+        f"account for {reach} of {total} findings."
+    )

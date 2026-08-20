@@ -32,6 +32,8 @@ caps at 10-60s, no background workers).
 | `verifiers.py` | Twelve deterministic checks against the bound exchange: CONFIRMED / REFUTED / INSUFFICIENT |
 | `attack_map.py` | MITRE ATT&CK techniques and tactics per weakness class, plus project coverage |
 | `retest.py` | Retest rounds derived from finding history: coverage, tally, client delta |
+| `learning.py` | Calibration against operator corrections, dismissal priors, verifier gap detection |
+| `precedent.py` | Retrieves the operator's own past rulings on similar findings for the reviewer |
 | `finding_identity.py` | Cross-scan identity: what is new, regressed, re-rated or no longer reported |
 | `report_html.py` | Self-contained themed HTML report |
 | `verdict_engine.py` | Deterministic status + confidence from the reviewer's signals |

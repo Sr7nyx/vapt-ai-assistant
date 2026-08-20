@@ -48,6 +48,7 @@ import finding_identity
 import attack_map
 import retest as retest_mod
 import learning
+import precedent
 from collections import Counter
 import pg_store as store
 from auth import get_current_user, User
@@ -735,6 +736,12 @@ def learning_summary(user: User = Depends(get_current_user)):
     return {
         "calibration": learning.calibration(findings, events),
         "priors": rows,
+        # Which finding classes no verifier claims: a ranked list of what to build
+        # next, produced by the system rather than guessed at.
+        "gaps": learning.verifier_gaps(findings),
+        # How much history the reviewer has to draw on. Reported so the feature is
+        # honest about being weak early rather than silently doing nothing.
+        "precedents": precedent.precedent_stats(findings),
         "findings_considered": len(findings),
     }
 
@@ -891,7 +898,16 @@ def _run_triage(jid: str, user_id: str, api_key: str, candidates: List[dict], la
                 store.save_job(job)
 
         with gemini_client.lane_config(lanes):
-            result = gemini_client.triage_findings(api_key, candidates, usage_sink=usage_records, progress_cb=cb)
+            # The account's own adjudicated findings, so the reviewer sees how this
+            # operator has ruled on similar things. Fetched once for the batch
+            # rather than per candidate.
+            try:
+                history = store.get_findings_by_user(user_id)
+            except Exception:
+                history = None
+            result = gemini_client.triage_findings(
+                api_key, candidates, usage_sink=usage_records, progress_cb=cb, history=history
+            )
         try:
             store.record_usage_batch(user_id, usage_records)
         except Exception:

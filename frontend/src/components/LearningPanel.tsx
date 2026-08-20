@@ -79,6 +79,57 @@ export default function LearningPanel() {
       </div>
 
       <div>
+        <div className="text-[10px] tracking-widest text-muted mb-2">
+          PRECEDENTS SHOWN TO THE REVIEWER
+        </div>
+        <p className="measure text-sm mb-2">
+          {data.precedents.useful
+            ? `${data.precedents.adjudicated} adjudicated findings across ${data.precedents.classes} classes are available as context.`
+            : `Only ${data.precedents.adjudicated} findings have been adjudicated so far.`}
+        </p>
+        <p className="measure text-xs text-muted">
+          When a finding is reviewed, the most similar findings you have already ruled on are put
+          in the prompt with what you decided and why. No model is retrained &mdash; the reviewer
+          simply sees your past judgments, and gets better at them as the history grows. Only
+          adjudicated findings are used: showing the model its own earlier guess is how it talks
+          itself into the same mistake twice.
+        </p>
+      </div>
+
+      <div>
+        <div className="text-[10px] tracking-widest text-muted mb-2">
+          VERIFIER COVERAGE
+        </div>
+        <p className="measure text-sm mb-3">{data.gaps.recommendation}</p>
+        {data.gaps.gaps.length > 0 && (
+          <table className="w-full max-w-2xl text-sm">
+            <thead>
+              <tr className="text-left text-muted border-b border-border">
+                <th className="font-normal text-[10px] tracking-widest pb-1.5">CLASS</th>
+                <th className="font-normal text-[10px] tracking-widest pb-1.5 text-right">
+                  UNCOVERED
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.gaps.gaps.map((g) => (
+                <tr key={g.class} className="border-b border-border/40 last:border-0">
+                  <td className="py-1.5 pr-3 truncate">{g.title}</td>
+                  <td className="py-1.5 text-right tabular-nums text-warn">{g.unclaimed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="measure text-xs text-muted mt-3">
+          Classes no deterministic check claims, ranked by how many findings a new verifier would
+          reach. A class a verifier claimed but could not settle is left out &mdash; that is thin
+          evidence, not missing code. Overall {(data.gaps.coverage * 100).toFixed(0)}% of findings
+          are settled mechanically.
+        </p>
+      </div>
+
+      <div>
         <div className="text-[10px] tracking-widest text-muted mb-2">LEARNED PRIORS</div>
         {data.priors.length === 0 ? (
           <p className="measure text-sm text-muted">

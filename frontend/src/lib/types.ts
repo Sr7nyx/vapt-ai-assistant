@@ -247,6 +247,16 @@ export interface CalibrationBucket {
   gap: number;
 }
 
+export interface VerifierGap {
+  class: string;
+  title: string;
+  total: number;
+  covered: number;
+  inconclusive: number;
+  unclaimed: number;
+  coverage: number;
+}
+
 export interface LearningSummary {
   calibration: {
     buckets: CalibrationBucket[];
@@ -262,5 +272,18 @@ export interface LearningSummary {
     rate: number;
     last_seen: string;
   }[];
+  gaps: {
+    gaps: VerifierGap[];
+    classes: number;
+    findings: number;
+    coverage: number;
+    recommendation: string;
+  };
+  precedents: {
+    adjudicated: number;
+    classes: number;
+    by_status: Record<string, number>;
+    useful: boolean;
+  };
   findings_considered: number;
 }

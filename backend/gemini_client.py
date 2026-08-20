@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from urllib.parse import urlparse
 
 import verifiers
+import precedent
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 
@@ -936,13 +937,19 @@ def _review_temperature():
         return 0.3
 
 
-def _run_skeptical_review(review_client, models, finding, raw_input, usage_sink=None):
+def _run_skeptical_review(review_client, models, finding, raw_input, usage_sink=None,
+                          precedents_block=""):
     """Run a second, adversarial pass (a reasoning model) and fold its verdict
     into the finding's QA notes. Never fails the analysis: on any error it appends
     a soft note and returns the finding unchanged. Reviewer instructions are
     folded into the user message because reasoning models such as DeepSeek R1 work
     best without a separate system prompt."""
     user = REVIEWER_SYSTEM_PROMPT + "\n\n" + _build_review_prompt(finding, raw_input)
+    if precedents_block:
+        # Appended AFTER the evidence, so a precedent cannot be mistaken for part of
+        # the material under review. It is context about how this operator has ruled
+        # before, not a fact about this finding.
+        user += "\n\n" + precedents_block
     messages = [{"role": "user", "content": user}]
     try:
         review = _run_with_fallback(
@@ -1045,7 +1052,7 @@ def _triage_cap():
         return 20
 
 
-def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None):
+def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None, history=None):
     """Skeptically triage imported scanner candidates before they reach a report.
 
     Runs the adversarial reviewer (REVIEW lane, a reasoning model) over each
@@ -1116,7 +1123,22 @@ def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None):
             done += 1
             _progress(0.05 + 0.9 * (done - 1) / total, f"Triaging {done}/{total}: {str(candidate.get('title',''))[:52]}")
             material = str(candidate.get("evidence") or "").strip() or str(candidate.get("description") or "").strip()
-            candidates[i] = _run_skeptical_review(review_client, models, candidate, material, usage_sink=usage_sink)
+            # Precedents are per-candidate: the reviewer sees how this operator
+            # ruled on similar findings before deciding this one.
+            block = ""
+            if history:
+                try:
+                    block = precedent.format_precedents(
+                        precedent.find_precedents(candidate, history)
+                    )
+                except Exception:
+                    block = ""
+            candidates[i] = _run_skeptical_review(
+                review_client, models, candidate, material,
+                usage_sink=usage_sink, precedents_block=block,
+            )
+            if block:
+                _append_remark(candidate, "- Review saw prior rulings on similar findings.")
         elif _repeatedly_dismissed(candidate):
             prior = candidate.get("_prior") or {}
             _append_remark(

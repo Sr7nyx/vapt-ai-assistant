@@ -183,3 +183,58 @@ class TestApplyPriors:
         cands = [{"title": "x", "affected_url": "https://t.test/a", "cwe": "CWE-1"}]
         out, hits = learning.apply_priors(cands, [])
         assert hits == 0 and out == cands
+
+
+class TestVerifierGaps:
+    """Which finding classes no verifier claims -- a ranked list of what to build
+    next, produced by the system rather than guessed at."""
+
+    @staticmethod
+    def fnd(fid, title, cwe, status=None):
+        d = {"id": fid, "title": title, "cwe": cwe, "affected_url": f"https://t.test/{fid}"}
+        if status is not None:
+            d["_verification"] = {"status": status}
+        return d
+
+    def corpus(self):
+        return [
+            self.fnd(1, "Missing CSP", "CWE-693", "CONFIRMED"),
+            self.fnd(2, "Missing CSP", "CWE-693", "REFUTED"),
+            self.fnd(3, "SQL injection", "CWE-89"),
+            self.fnd(4, "SQL injection", "CWE-89"),
+            self.fnd(5, "SQL injection", "CWE-89"),
+            self.fnd(6, "SSRF in webhook", "CWE-918"),
+            self.fnd(7, "Reflected XSS", "CWE-79", "INSUFFICIENT"),
+        ]
+
+    def test_ranks_gaps_by_reach(self):
+        g = learning.verifier_gaps(self.corpus())
+        assert g["gaps"][0]["title"] == "SQL injection"
+        assert g["gaps"][0]["unclaimed"] == 3
+
+    def test_a_covered_class_is_not_a_gap(self):
+        g = learning.verifier_gaps(self.corpus())
+        assert all(r["title"] != "Missing CSP" for r in g["gaps"])
+
+    def test_inconclusive_is_not_counted_as_a_gap(self):
+        """A verifier claimed it but the evidence did not settle it. Writing another
+        verifier would not have helped -- that is thin evidence, not missing code."""
+        g = learning.verifier_gaps(self.corpus())
+        assert all(r["title"] != "Reflected XSS" for r in g["gaps"])
+
+    def test_coverage_counts_only_settled_findings(self):
+        g = learning.verifier_gaps(self.corpus())
+        assert g["coverage"] == round(2 / 7, 3)
+
+    def test_the_recommendation_names_the_largest_gap(self):
+        g = learning.verifier_gaps(self.corpus())
+        assert "SQL injection" in g["recommendation"]
+
+    def test_full_coverage_says_so(self):
+        g = learning.verifier_gaps([self.fnd(1, "Missing CSP", "CWE-693", "CONFIRMED")])
+        assert g["gaps"] == []
+        assert "evidence quality" in g["recommendation"]
+
+    def test_empty_input_does_not_raise(self):
+        g = learning.verifier_gaps([])
+        assert g["gaps"] == [] and g["findings"] == 0
