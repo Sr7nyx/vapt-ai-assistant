@@ -9,6 +9,7 @@ import {
   JobHistoryRow,
   RetestCampaign,
   AttackCoverage,
+  LearningSummary,
 } from "./types";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
@@ -95,6 +96,7 @@ export const api = {
     req<{ deleted: number; missing: number }>(t, "POST", "/findings/bulk-delete", { ids }),
   findingEvents: (t: string | undefined, id: number) =>
     req<FindingEvent[]>(t, "GET", `/findings/${id}/events`),
+  learningSummary: (t: string | undefined) => req<LearningSummary>(t, "GET", "/learning"),
   listJobs: (t: string | undefined) => req<JobHistoryRow[]>(t, "GET", "/jobs"),
   retestCampaign: (t: string | undefined, pid: number, round?: number) =>
     req<RetestCampaign>(t, "GET", `/projects/${pid}/retest${round ? `?round=${round}` : ""}`),

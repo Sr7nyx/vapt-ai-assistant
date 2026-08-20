@@ -47,6 +47,7 @@ import report_html
 import finding_identity
 import attack_map
 import retest as retest_mod
+import learning
 from collections import Counter
 import pg_store as store
 from auth import get_current_user, User
@@ -716,6 +717,28 @@ def attack_coverage(project_id: int, user: User = Depends(get_current_user)):
     return attack_map.coverage(findings)
 
 
+@app.get("/learning")
+def learning_summary(user: User = Depends(get_current_user)):
+    """What the system has learned from being corrected.
+
+    Nothing here trains a model. It reads decisions the operator already made and
+    reports two things: whether the verdict engine's confidence means what it
+    says, and which finding classes have been dismissed often enough that
+    re-reviewing them is waste.
+    """
+    findings = _annotate(store.get_findings_by_user(user.id))
+    events = store.get_correction_events(user.id)
+    rows = learning.priors(findings, events)
+    for r in rows:
+        # Fingerprints are internal; a UI showing one would be noise.
+        r.pop("fingerprint", None)
+    return {
+        "calibration": learning.calibration(findings, events),
+        "priors": rows,
+        "findings_considered": len(findings),
+    }
+
+
 @app.get("/jobs")
 def job_history(user: User = Depends(get_current_user)):
     """Recent runs for this account.
@@ -816,10 +839,27 @@ async def scan_parse(
             # A comparison failure must not cost the user their parsed scan.
             delta, absent = None, []
 
+    # Priors: classes this operator has repeatedly dismissed arrive already
+    # carrying that history. Nothing is hidden -- the candidate still appears and
+    # is still committable -- but the caller can now skip an expensive review for
+    # a class it has been told about three or more times.
+    savings = None
+    try:
+        prior_rows = learning.priors(
+            store.get_findings_by_user(user.id), store.get_correction_events(user.id)
+        )
+        if prior_rows:
+            deduped, _ = learning.apply_priors(deduped, prior_rows)
+            savings = learning.review_savings(deduped)
+    except Exception:
+        # A prior is an optimisation. Losing it must not cost the user their scan.
+        savings = None
+
     return {
         "candidates": deduped, "removed": removed, "per_file": per_file,
         "warnings": warnings, "summary": scan_import.summarize(deduped),
         "delta": delta,
+        "prior_savings": savings,
         # Open findings the scan did not report. Never closed automatically: the
         # scan may simply not have covered them, and a tool that silently marks
         # findings fixed is worse than one that says nothing.

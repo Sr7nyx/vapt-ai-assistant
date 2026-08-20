@@ -1088,8 +1088,24 @@ def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None):
     def _has_material(candidate):
         return bool(str(candidate.get("evidence") or "").strip() or str(candidate.get("description") or "").strip())
 
+    def _repeatedly_dismissed(candidate):
+        """A class this operator has dismissed several times already.
+
+        Set by the import path from the account's own correction history. Skipping
+        the review call is the entire cost saving: paying a reasoning model to be
+        told again that a header on a static asset is not a finding is waste.
+
+        The candidate is NOT dropped -- it still appears, still commits, and still
+        carries its history in the remark, so the operator can disagree.
+        """
+        prior = candidate.get("_prior") or {}
+        return prior.get("state") == "previously_dismissed"
+
     cap = _triage_cap()
-    triageable = [i for i, c in enumerate(candidates) if not c.get("noise") and _has_material(c)]
+    triageable = [
+        i for i, c in enumerate(candidates)
+        if not c.get("noise") and _has_material(c) and not _repeatedly_dismissed(c)
+    ]
     order = sorted(triageable, key=lambda i: (_severity_rank(candidates[i].get("severity")), i))
     to_triage = set(order[:cap])
     total = max(1, len(to_triage))
@@ -1101,6 +1117,13 @@ def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None):
             _progress(0.05 + 0.9 * (done - 1) / total, f"Triaging {done}/{total}: {str(candidate.get('title',''))[:52]}")
             material = str(candidate.get("evidence") or "").strip() or str(candidate.get("description") or "").strip()
             candidates[i] = _run_skeptical_review(review_client, models, candidate, material, usage_sink=usage_sink)
+        elif _repeatedly_dismissed(candidate):
+            prior = candidate.get("_prior") or {}
+            _append_remark(
+                candidate,
+                f"- Triage: skipped ({prior.get('note', 'previously dismissed')} "
+                "No review call was spent; re-triage it if this context differs).",
+            )
         elif candidate.get("noise"):
             _append_remark(candidate, "- Triage: skipped (informational / scanner noise; not triaged).")
         elif not _has_material(candidate):

@@ -237,3 +237,30 @@ export interface AttackCoverage {
   tactics: AttackTactic[];
   unmapped: number;
 }
+
+export interface CalibrationBucket {
+  claimed: number;
+  observed: number;
+  n: number;
+  overturned: number;
+  reliable: boolean;
+  gap: number;
+}
+
+export interface LearningSummary {
+  calibration: {
+    buckets: CalibrationBucket[];
+    samples: number;
+    corrections: number;
+    calibration_error: number | null;
+    verdict: string;
+  };
+  priors: {
+    title: string;
+    dismissed: number;
+    upheld: number;
+    rate: number;
+    last_seen: string;
+  }[];
+  findings_considered: number;
+}

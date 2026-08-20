@@ -875,3 +875,25 @@ def reap_stale_jobs(older_than_minutes=30):
         return True
     except Exception:
         return False
+
+
+def get_correction_events(user_id, limit=4000):
+    """Every status and severity change this account has made, across all projects.
+
+    Scoped to those two fields at the database rather than in Python: an account
+    with a long history would otherwise pull description edits and rationale text
+    it has no use for, which is most of the table by volume.
+    """
+    return _all(
+        """
+        SELECT id, finding_id, project_id, actor, action, field,
+               old_value, new_value, created_at
+        FROM finding_events
+        WHERE user_id = %s
+          AND field IN ('status', 'severity')
+          AND old_value IS DISTINCT FROM new_value
+        ORDER BY id DESC
+        LIMIT %s
+        """,
+        (user_id, int(limit)),
+    )

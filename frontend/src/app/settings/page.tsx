@@ -10,6 +10,7 @@ import InfoHint, { LabelWithHint } from "@/components/InfoHint";
 import { Section } from "@/components/Terminal";
 import { getMotion, setMotion, MotionSetting } from "@/lib/motion";
 import RunHistory from "@/components/RunHistory";
+import LearningPanel from "@/components/LearningPanel";
 
 const PRESETS = [
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
@@ -301,6 +302,19 @@ export default function SettingsPage() {
           </p>
         </fieldset>
         </div>
+      </Section>
+
+      <Section
+        title="What the system has learned"
+        actions={
+          <InfoHint label="About learning">
+            No model is trained here. This reads decisions you have already made and reports two
+            things: whether the verdict engine&rsquo;s confidence means what it claims, and which
+            finding classes you have dismissed often enough that re-reviewing them is waste.
+          </InfoHint>
+        }
+      >
+        <LearningPanel />
       </Section>
 
       <Section
