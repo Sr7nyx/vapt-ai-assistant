@@ -108,6 +108,10 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes handoffDot {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
 @keyframes blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
@@ -348,6 +352,14 @@ html[data-motion="reduced"] { scroll-behavior: auto; }
   html[data-motion="reduced"] .float-in { animation: none; opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
     html[data-motion="system"] .float-in { animation: none; opacity: 1; }
+  }
+
+  .handoff-dot {
+    animation: handoffDot 1.1s ease-in-out infinite;
+  }
+  html[data-motion="reduced"] .handoff-dot { animation: none; opacity: 0.6; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-motion="system"] .handoff-dot { animation: none; opacity: 0.6; }
   }
 
   .caret::after {

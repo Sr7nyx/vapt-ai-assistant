@@ -1,12 +1,12 @@
 "use client";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useCallback, useEffect } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import TopNav from "./TopNav";
 import StatusLine from "./StatusLine";
 import CommandPalette from "./CommandPalette";
 import SignInGate from "./SignInGate";
-import { Spinner } from "./Loading";
+import SessionHandoff from "./SessionHandoff";
 import { bindSessionOwner, forgetSession } from "@/lib/prefs";
 import Onboarding from "./Onboarding";
 import IdleWarning from "./IdleWarning";
@@ -23,6 +23,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+
+  // The handoff belongs to an actual sign-in, not to every page load. Someone
+  // returning to an open session should land straight in the console -- showing
+  // "VERIFYING TOKEN" on a simple refresh would be theatre, and slower than the
+  // thing it replaced.
+  const [handoff, setHandoff] = useState(false);
+  const sawUnauthenticated = useRef(false);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      sawUnauthenticated.current = true;
+      return;
+    }
+    if (status === "authenticated" && sawUnauthenticated.current) {
+      sawUnauthenticated.current = false;
+      setHandoff(true);
+      // Long enough for the stages to read, short enough not to be in the way.
+      const t = window.setTimeout(() => setHandoff(false), 2100);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
 
   // Bind stored provider configuration to the signed-in account during render,
   // before any child effect can read it. If the browser holds a configuration
@@ -65,11 +86,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Hooks above this line run on every render, before any early return.
 
   if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted gap-2">
-        <Spinner /> Loading…
-      </div>
-    );
+    // A bare spinner is the worst thing to show after a redirect: the user has
+    // just left the site and come back, and it gives no signal they arrived
+    // anywhere in particular.
+    return <SessionHandoff email={session?.user?.email || undefined} />;
+  }
+
+  if (handoff) {
+    return <SessionHandoff email={session?.user?.email || undefined} />;
   }
   if (status !== "authenticated") {
     return <SignInGate />;
