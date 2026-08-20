@@ -1,12 +1,13 @@
 "use client";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import TopNav from "./TopNav";
 import StatusLine from "./StatusLine";
 import CommandPalette from "./CommandPalette";
 import SignInGate from "./SignInGate";
 import SessionHandoff from "./SessionHandoff";
+import { consumeSignIn } from "@/lib/handoff";
 import { bindSessionOwner, forgetSession } from "@/lib/prefs";
 import Onboarding from "./Onboarding";
 import IdleWarning from "./IdleWarning";
@@ -19,30 +20,32 @@ import { applyMotion } from "@/lib/motion";
 const IDLE_MS = 10 * 60 * 1000;
 const WARN_MS = 60 * 1000;
 
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
-  // The handoff belongs to an actual sign-in, not to every page load. Someone
-  // returning to an open session should land straight in the console -- showing
-  // "VERIFYING TOKEN" on a simple refresh would be theatre, and slower than the
-  // thing it replaced.
+  // The handoff belongs to a completed sign-in.
+  //
+  // A React ref cannot carry that fact: signing in with Google is a full page
+  // navigation away and back, so every piece of in-memory state is destroyed. The
+  // component that observed "unauthenticated" no longer exists when the session
+  // arrives.
+  //
+  // So the intent is written to sessionStorage at the moment sign-in is clicked,
+  // and consumed once on return. sessionStorage rather than localStorage because
+  // it dies with the tab -- a flag left behind would replay the sequence days
+  // later in a tab that was never signed in through this flow.
   const [handoff, setHandoff] = useState(false);
-  const sawUnauthenticated = useRef(false);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      sawUnauthenticated.current = true;
-      return;
-    }
-    if (status === "authenticated" && sawUnauthenticated.current) {
-      sawUnauthenticated.current = false;
-      setHandoff(true);
-      // Long enough for the stages to read, short enough not to be in the way.
-      const t = window.setTimeout(() => setHandoff(false), 2100);
-      return () => clearTimeout(t);
-    }
+    if (status !== "authenticated") return;
+    if (!consumeSignIn()) return;
+    setHandoff(true);
+    // Long enough for the stages to read, short enough not to be in the way.
+    const t = window.setTimeout(() => setHandoff(false), 2100);
+    return () => clearTimeout(t);
   }, [status]);
 
   // Bind stored provider configuration to the signed-in account during render,
@@ -85,21 +88,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   // Hooks above this line run on every render, before any early return.
 
-  if (status === "loading") {
-    // A bare spinner is the worst thing to show after a redirect: the user has
-    // just left the site and come back, and it gives no signal they arrived
-    // anywhere in particular.
-    //
-    // No email here: while the status is "loading" next-auth types `session` as
-    // null, so TypeScript narrows it to `never` and reading `.user` is an error.
-    // It is also the honest state -- the account is not resolved yet, which is
-    // precisely what the first stage says.
-    return <SessionHandoff />;
-  }
-
+  // The handoff belongs to a completed sign-in and nothing else.
+  //
+  // It used to render for status === "loading" as well, which fires on EVERY cold
+  // page load -- including a first visit by someone who has never signed in. The
+  // result was a "VERIFYING TOKEN" screen appearing before the sign-in page had
+  // even been seen, which is the opposite of what it is for.
   if (handoff) {
     // Reached only from "authenticated", so the session is present here.
     return <SessionHandoff email={session?.user?.email || undefined} />;
+  }
+
+  if (status === "loading") {
+    // A cold load with no sign-in behind it. Nothing has happened worth narrating,
+    // so this stays a quiet placeholder rather than a staged sequence.
+    return <div className="min-h-screen bg-bg" aria-busy="true" />;
   }
   if (status !== "authenticated") {
     return <SignInGate />;

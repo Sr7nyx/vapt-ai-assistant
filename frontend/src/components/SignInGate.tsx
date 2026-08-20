@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import ShaderField from "./ShaderField";
 import ReactiveOrb, { OrbFocus } from "./ReactiveOrb";
 import { GithubButton, SourceFooter } from "./SourceLinks";
+import { markSignInStarted } from "@/lib/handoff";
 
 /**
  * Sign-in.
@@ -164,7 +165,13 @@ export default function SignInGate() {
               >
                 <button
                   className="btn btn-icon flex-1 flex items-center justify-center gap-2.5 py-3"
-                  onClick={() => signIn("google")}
+                  onClick={() => {
+                    // Recorded before the redirect: the page is about to be
+                    // destroyed, so nothing in memory survives to say this
+                    // happened.
+                    markSignInStarted();
+                    signIn("google");
+                  }}
                 >
                   <svg width="17" height="17" viewBox="0 0 24 24">
                     <path
