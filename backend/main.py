@@ -47,6 +47,7 @@ import report_html
 import finding_identity
 import attack_map
 import retest as retest_mod
+import retest_guide
 import learning
 import precedent
 from collections import Counter
@@ -643,6 +644,34 @@ def finding_events(finding_id: int, user: User = Depends(get_current_user)):
         at = e.get("created_at")
         e["created_at"] = at.isoformat() if hasattr(at, "isoformat") else str(at or "")
     return events
+
+
+@app.get("/findings/{finding_id}/retest-guide")
+def finding_retest_guide(finding_id: int, ai: bool = False,
+                         api_key: Optional[str] = None,
+                         user: User = Depends(get_current_user)):
+    """Finding-specific retest guidance: the exact commands to reproduce and clear
+    this finding.
+
+    Derived from the finding on demand rather than stored, so every finding --
+    including ones committed before this feature existed -- has a guide, and it
+    cannot drift out of step with the finding. Access is authorised through the
+    finding itself, which is already owner-scoped.
+
+    The deterministic guide is always returned. `ai=1` additionally asks the review
+    lane to refine the prose under a strict no-fabrication constraint; if that is
+    unavailable or fails, the deterministic guide is returned unchanged, so the
+    endpoint never fails because of the optional AI step.
+    """
+    finding = store.get_finding(user.id, finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    guide = retest_guide.build_guide(finding)
+    if ai:
+        guide = retest_guide.enrich(finding, guide, _api_key(api_key))
+    guide["copy_all"] = retest_guide.copy_all_text(guide)
+    return guide
 
 
 # --- Analyze (background job) ------------------------------------------------

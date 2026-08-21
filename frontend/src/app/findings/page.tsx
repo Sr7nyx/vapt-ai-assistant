@@ -13,6 +13,7 @@ import RetestModal from "@/components/RetestModal";
 import MultiSelect from "@/components/MultiSelect";
 import ReviewPanel, { VerdictBadge, VerdictChip, ReviewFlag, VerifiedChip } from "@/components/ReviewPanel";
 import AuditTrail from "@/components/AuditTrail";
+import RetestGuide from "@/components/RetestGuide";
 import { Section } from "@/components/Terminal";
 import { useSelection } from "@/hooks/useSelection";
 import { MasterCheckbox, RowCheckbox, SelectionBar } from "@/components/SelectionBar";
@@ -32,6 +33,7 @@ export default function FindingsPage() {
   // Tracked separately from row expansion so opening a finding to read it does not
   // fire a history request every time.
   const [historyFor, setHistoryFor] = useState<number | null>(null);
+  const [guideFor, setGuideFor] = useState<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
   const [retesting, setRetesting] = useState<Finding | null>(null);
@@ -282,6 +284,31 @@ export default function FindingsPage() {
                         {typeof f.evidence === "string" && f.evidence && <Detail label="Evidence" mono>{f.evidence}</Detail>}
                         {typeof f.remediation === "string" && f.remediation && <Detail label="Remediation">{f.remediation}</Detail>}
                         {typeof f.references_data === "string" && f.references_data && <Detail label="References">{f.references_data}</Detail>}
+
+                        <div className="rounded-lg border border-border/60">
+                          <button
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                            onClick={() => setGuideFor(guideFor === f.id ? null : f.id)}
+                            aria-expanded={guideFor === f.id}
+                          >
+                            <svg
+                              width="12" height="12" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              className={`text-muted transition-transform ${guideFor === f.id ? "rotate-90" : ""}`}
+                            >
+                              <path d="m9 18 6-6-6-6" />
+                            </svg>
+                            <span className="term-h text-muted">Retest guide</span>
+                            <span className="text-[11px] text-muted ml-auto">
+                              ready-to-run commands to reproduce &amp; verify
+                            </span>
+                          </button>
+                          {guideFor === f.id && (
+                            <div className="px-3 pb-3 pt-1 border-t border-border/60">
+                              <RetestGuide findingId={f.id} />
+                            </div>
+                          )}
+                        </div>
 
                         <div className="rounded-lg border border-border/60">
                           <button

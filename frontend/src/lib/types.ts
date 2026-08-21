@@ -226,6 +226,40 @@ export interface RetestCampaign {
   outcomes: Record<string, string>;
 }
 
+export interface RetestGuideCommand {
+  label: string;
+  command: string;
+  note?: string;
+}
+
+export interface RetestGuidePlaceholder {
+  placeholder: string;
+  means: string;
+}
+
+export interface RetestGuide {
+  generated: "deterministic" | "ai-enriched";
+  kind: "web" | "network";
+  class: string;
+  class_basis: string;
+  target: {
+    host: string;
+    port: string;
+    url: string;
+    method: string;
+    parameter: string;
+  };
+  objective: string;
+  prerequisites: string[];
+  commands: RetestGuideCommand[];
+  expected_vulnerable: string[];
+  expected_remediated: string[];
+  pass_fail: string;
+  evidence_to_capture: string[];
+  placeholders: RetestGuidePlaceholder[];
+  copy_all: string;
+}
+
 export interface AttackTactic {
   tactic: string;
   tactic_name: string;

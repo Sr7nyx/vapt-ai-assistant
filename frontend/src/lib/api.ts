@@ -8,6 +8,7 @@ import {
   UsageSummary,
   JobHistoryRow,
   RetestCampaign,
+  RetestGuide,
   AttackCoverage,
   LearningSummary,
 } from "./types";
@@ -103,6 +104,8 @@ export const api = {
   attackCoverage: (t: string | undefined, pid: number) =>
     req<AttackCoverage>(t, "GET", `/projects/${pid}/attack`),
   retestFinding: (t: string | undefined, id: number, body: unknown) => req<unknown>(t, "POST", `/findings/${id}/retest`, body),
+  retestGuide: (t: string | undefined, id: number, ai = false) =>
+    req<RetestGuide>(t, "GET", `/findings/${id}/retest-guide${ai ? "?ai=1" : ""}`),
 
   analyze: (t: string | undefined, body: unknown) => req<{ job_id: string }>(t, "POST", "/analyze", body),
   scanTriage: (t: string | undefined, body: unknown) => req<{ job_id: string }>(t, "POST", "/scan/triage", body),
