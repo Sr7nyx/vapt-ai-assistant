@@ -399,6 +399,7 @@ Long-running work returns a `job_id` and is polled via `/jobs/{id}`. Jobs run in
 **Authorized use only.** This is a defensive assessment aid. Use it only against systems you have explicit written permission to test.
 
 **Built-in protections**
+- Credentials and PII are stripped before evidence leaves for a model. Bearer tokens, cookie values, API keys, private keys, card numbers and email addresses are masked on all three paths to a provider — analysis, review and triage — while the structure survives, so `Authorization: Bearer …` becomes `Authorization: Bearer [REDACTED:auth]` and the model still knows the request was authenticated. Deterministic verification runs locally against the **unredacted** evidence, so nothing is lost: the cookie-flag check still reads the real `Set-Cookie`, and reflection still matches the real payload
 - Per-user data isolation enforced in every query, with finding access authorized through the parent project
 - Row level security enabled on every table with no policies attached. Supabase publishes public-schema tables through PostgREST using the anon key, which is public by design; without this, anyone holding that key could read and write application data directly, bypassing token verification, per-user scoping and the audit trail. The service connects as a role that bypasses RLS and verifies this at startup rather than coming up silently empty
 - Google ID tokens verified against Google's public keys with a mandatory audience check
@@ -466,9 +467,7 @@ frontend/
 
 ## Roadmap
 
-- Privacy-preserving redaction: mask secrets, tokens, and PII before anything leaves for the LLM
 - Per-user rate limiting on analysis and triage
-- Postgres-backed job store so long jobs survive a restart
 - Grounded automatic executive summary
 - Per-finding confidence score folding all verification signals into one number
 - HAR-to-analyzer summarizer

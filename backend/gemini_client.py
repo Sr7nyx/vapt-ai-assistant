@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import verifiers
 import precedent
+import redaction
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 
@@ -1023,7 +1024,10 @@ def _review_findings(findings, raw_input, default_key, usage_sink=None, progress
                     )
                 except Exception:
                     pass
-            findings[i] = _run_skeptical_review(review_client, models, finding, raw_input, usage_sink=usage_sink)
+            # Redacted per finding rather than once: a finding ABOUT a token keeps
+            # its token, because the token is the evidence being reported.
+            safe_slice, _ = redaction.redact(raw_input, finding)
+            findings[i] = _run_skeptical_review(review_client, models, finding, safe_slice, usage_sink=usage_sink)
             if progress_cb:
                 try:
                     verdict = re.search(
@@ -1123,6 +1127,13 @@ def triage_findings(api_key, candidates, usage_sink=None, progress_cb=None, hist
             done += 1
             _progress(0.05 + 0.9 * (done - 1) / total, f"Triaging {done}/{total}: {str(candidate.get('title',''))[:52]}")
             material = str(candidate.get("evidence") or "").strip() or str(candidate.get("description") or "").strip()
+            # Triage sends scanner evidence to the reviewer, so it needs the same
+            # treatment as the analyzer path. Easy to miss: this is a third route
+            # to the provider, and a redaction that covers only two is not a
+            # feature, it is a false assurance.
+            material, tri_redaction = redaction.redact(material, candidate)
+            if tri_redaction.get("redacted"):
+                _append_remark(candidate, redaction.summarise(tri_redaction))
             # Precedents are per-candidate: the reviewer sees how this operator
             # ruled on similar findings before deciding this one.
             block = ""
@@ -1198,9 +1209,14 @@ def analyze_vapt_data(api_key: str, analysis_type: str, raw_input: str, usage_si
     base_url, key, models = _lane("MAIN", DEFAULT_MAIN_MODELS, api_key)
     client = _client(base_url, key)
 
+    # The provider sees a redacted copy. `raw_input` itself is untouched, so the
+    # verifiers below still read real cookies, real payloads and real headers --
+    # redaction protects the network hop, it does not degrade the analysis.
+    safe_input, redaction_report = redaction.redact(raw_input)
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": _build_analysis_prompt(analysis_type, raw_input)},
+        {"role": "user", "content": _build_analysis_prompt(analysis_type, safe_input)},
     ]
     findings = _run_with_fallback(
         client, messages, models, _parse_findings_list,
@@ -1213,6 +1229,11 @@ def analyze_vapt_data(api_key: str, analysis_type: str, raw_input: str, usage_si
 
     _progress(0.35, f"{len(findings)} finding(s) found - scoring and enriching\u2026")
     findings = [_postprocess_finding(f, raw_input) for f in findings]
+    if redaction_report.get("redacted"):
+        note = redaction.summarise(redaction_report)
+        _progress(0.36, f"Redacted {redaction_report['total']} credential(s) before the model saw the evidence")
+        for f in findings:
+            _append_remark(f, note)
     findings = _enrich_findings(findings)
 
     # Mechanical verification runs BEFORE the reviewer and costs nothing. Where a

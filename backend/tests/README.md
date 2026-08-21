@@ -12,12 +12,13 @@ pytest
 ```
 
 No network, no database, and no LLM calls: DNS is stubbed, and every fixture is
-inline in the test file. The suite runs in about a second. **398 tests.**
+inline in the test file. The suite runs in about a second. **425 tests.**
 
 ## What each file covers
 
 | File | Covers | Why it matters |
 | --- | --- | --- |
+| `test_redaction.py` | That credentials are masked, and more importantly that cookie attributes, payloads, status codes and non-card long numbers are NOT | Leaking a credential is the failure this prevents; over-masking is the one that quietly ruins the product, since losing `Secure` breaks the cookie finding and losing a payload breaks the reflection finding. |
 | `test_learning.py` | Calibration excludes the engine's own changes, thin buckets are reported as thin, contested classes form no prior, verifier gaps rank by reach | A confidence measured against the engine's agreement with itself always looks good, and a rate from three findings is worse than none. |
 | `test_precedent.py` | Only adjudicated findings are retrieved, weak matches return nothing, the prompt block states decisions without instructing | Retrieving an unreviewed finding shows the model its own earlier guess, which is how it repeats a mistake. A precedent is context, not an order. |
 | `test_attack_map.py` | That every weakness class maps to at least one technique, every technique names a tactic, and an unknown class returns NOTHING | A guessed ATT&CK id reads as authoritative and survives into a client's threat model, so refusing to map is the safe answer. |
